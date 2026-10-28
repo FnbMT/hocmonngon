@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function() {
+        try {
+          var _origFetch = window.fetch ? window.fetch.bind(window) : undefined;
+          Object.defineProperty(window, 'fetch', {
+            configurable: true,
+            enumerable: true,
+            get: function() {
+              return _origFetch;
+            },
+            set: function(newFetch) {
+              _origFetch = newFetch;
+            }
+          });
+        } catch (err) {
+          // If property cannot be redefined, allow error listener to handle it
+        }
+
+        window.addEventListener('error', function(e) {
+          if (
+            (e.filename && e.filename.indexOf('chrome-extension://') !== -1) ||
+            (e.message && e.message.indexOf('fetch') !== -1 && e.message.indexOf('getter') !== -1)
+          ) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(e) {
+          if (
+            e.reason &&
+            e.reason.message &&
+            e.reason.message.indexOf('fetch') !== -1 &&
+            e.reason.message.indexOf('getter') !== -1
+          ) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        });
+      })();
+    </script>
+    <title>Học Món Ngon - Nền Tảng Học Nấu Ăn Trực Tuyến</title>
+    <meta name="description" content="Nền tảng học nấu ăn trực tuyến cùng các Đầu Bếp hàng đầu Việt Nam: Học thử, đăng ký khóa học, xem video bài giảng YouTube, tải công thức và hệ thống quản lý học viên." />
+    <meta property="og:title" content="Học Món Ngon - Nền Tảng Học Nấu Ăn Trực Tuyến" />
+    <meta property="og:description" content="Học nấu món ngon cùng những Đầu Bếp bạn tin tưởng. Trải nghiệm công thức chuẩn vị." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

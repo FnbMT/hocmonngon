@@ -1,0 +1,8 @@
+{
+  "name": "Remix Học Món Ngon - Nền Tảng Học Nấu Ăn Trực Tuyến",
+  "description": "Nền tảng học nấu ăn trực tuyến cùng các Đầu Bếp hàng đầu Việt Nam: Học thử, đăng ký khóa học, xem video bài giảng YouTube, tải công thức và hệ thống quản lý học viên.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
