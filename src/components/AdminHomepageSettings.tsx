@@ -19,9 +19,13 @@ import {
   ShieldCheck, 
   MessageSquare, 
   Star,
-  ExternalLink
+  ExternalLink,
+  Compass,
+  Info,
+  Link2,
+  X
 } from 'lucide-react';
-import { HomepageConfig, FaqItem } from '../types';
+import { HomepageConfig, FaqItem, FooterLinkItem } from '../types';
 import { StorageService, DEFAULT_HOMEPAGE_CONFIG } from '../services/storage';
 
 interface AdminHomepageSettingsProps {
@@ -46,13 +50,228 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
   // Field option management
   const [newFieldOption, setNewFieldOption] = useState('');
 
+  // Footer Links Management State
+  const [newExploreLabel, setNewExploreLabel] = useState('');
+  const [newExploreUrl, setNewExploreUrl] = useState('');
+  const [newExploreHighlight, setNewExploreHighlight] = useState(false);
+
+  const [newAboutLabel, setNewAboutLabel] = useState('');
+  const [newAboutUrl, setNewAboutUrl] = useState('');
+
+  const [newBottomLabel, setNewBottomLabel] = useState('');
+  const [newBottomUrl, setNewBottomUrl] = useState('');
+
+  // Footer Explore Handlers
+  const handleAddExploreLink = () => {
+    if (!newExploreLabel.trim()) {
+      showToast('Vui lòng nhập tên liên kết Khám Phá!');
+      return;
+    }
+    const currentLinks = config.footer.exploreColumn?.links || [];
+    const updatedLinks = [
+      ...currentLinks,
+      {
+        label: newExploreLabel.trim(),
+        url: newExploreUrl.trim() || 'catalog',
+        isHighlight: newExploreHighlight
+      }
+    ];
+    const updatedConfig = {
+      ...config,
+      footer: {
+        ...config.footer,
+        exploreColumn: {
+          ...config.footer.exploreColumn,
+          links: updatedLinks
+        }
+      }
+    };
+    setConfig(updatedConfig);
+    StorageService.saveHomepageConfig(updatedConfig);
+    setNewExploreLabel('');
+    setNewExploreUrl('');
+    setNewExploreHighlight(false);
+    showToast('Đã thêm liên kết vào cột Khám Phá!');
+  };
+
+  const handleDeleteExploreLink = (idx: number) => {
+    const currentLinks = config.footer.exploreColumn?.links || [];
+    const updatedLinks = currentLinks.filter((_, i) => i !== idx);
+    const updatedConfig = {
+      ...config,
+      footer: {
+        ...config.footer,
+        exploreColumn: {
+          ...config.footer.exploreColumn,
+          links: updatedLinks
+        }
+      }
+    };
+    setConfig(updatedConfig);
+    StorageService.saveHomepageConfig(updatedConfig);
+    showToast('Đã xóa liên kết Khám Phá!');
+  };
+
+  const handleUpdateExploreLink = (idx: number, field: 'label' | 'url' | 'isHighlight', value: any) => {
+    const currentLinks = [...(config.footer.exploreColumn?.links || [])];
+    if (currentLinks[idx]) {
+      currentLinks[idx] = { ...currentLinks[idx], [field]: value };
+      const updatedConfig = {
+        ...config,
+        footer: {
+          ...config.footer,
+          exploreColumn: {
+            ...config.footer.exploreColumn,
+            links: currentLinks
+          }
+        }
+      };
+      setConfig(updatedConfig);
+      StorageService.saveHomepageConfig(updatedConfig);
+    }
+  };
+
+  // Footer About Handlers
+  const handleAddAboutLink = () => {
+    if (!newAboutLabel.trim()) {
+      showToast('Vui lòng nhập tên liên kết Về Chúng Tôi!');
+      return;
+    }
+    const currentLinks = config.footer.aboutColumn?.links || [];
+    const updatedLinks = [
+      ...currentLinks,
+      {
+        label: newAboutLabel.trim(),
+        url: newAboutUrl.trim() || '#'
+      }
+    ];
+    const updatedConfig = {
+      ...config,
+      footer: {
+        ...config.footer,
+        aboutColumn: {
+          ...config.footer.aboutColumn,
+          links: updatedLinks
+        }
+      }
+    };
+    setConfig(updatedConfig);
+    StorageService.saveHomepageConfig(updatedConfig);
+    setNewAboutLabel('');
+    setNewAboutUrl('');
+    showToast('Đã thêm liên kết vào cột Về Chúng Tôi!');
+  };
+
+  const handleDeleteAboutLink = (idx: number) => {
+    const currentLinks = config.footer.aboutColumn?.links || [];
+    const updatedLinks = currentLinks.filter((_, i) => i !== idx);
+    const updatedConfig = {
+      ...config,
+      footer: {
+        ...config.footer,
+        aboutColumn: {
+          ...config.footer.aboutColumn,
+          links: updatedLinks
+        }
+      }
+    };
+    setConfig(updatedConfig);
+    StorageService.saveHomepageConfig(updatedConfig);
+    showToast('Đã xóa liên kết Về Chúng Tôi!');
+  };
+
+  const handleUpdateAboutLink = (idx: number, field: 'label' | 'url', value: string) => {
+    const currentLinks = [...(config.footer.aboutColumn?.links || [])];
+    if (currentLinks[idx]) {
+      currentLinks[idx] = { ...currentLinks[idx], [field]: value };
+      const updatedConfig = {
+        ...config,
+        footer: {
+          ...config.footer,
+          aboutColumn: {
+            ...config.footer.aboutColumn,
+            links: currentLinks
+          }
+        }
+      };
+      setConfig(updatedConfig);
+      StorageService.saveHomepageConfig(updatedConfig);
+    }
+  };
+
+  // Footer Bottom Links Handlers
+  const handleAddBottomLink = () => {
+    if (!newBottomLabel.trim()) {
+      showToast('Vui lòng nhập tên liên kết đáy trang!');
+      return;
+    }
+    const currentLinks = config.footer.bottomLinks || [];
+    const updatedLinks = [
+      ...currentLinks,
+      {
+        label: newBottomLabel.trim(),
+        url: newBottomUrl.trim() || '#'
+      }
+    ];
+    const updatedConfig = {
+      ...config,
+      footer: {
+        ...config.footer,
+        bottomLinks: updatedLinks
+      }
+    };
+    setConfig(updatedConfig);
+    StorageService.saveHomepageConfig(updatedConfig);
+    setNewBottomLabel('');
+    setNewBottomUrl('');
+    showToast('Đã thêm liên kết đáy trang!');
+  };
+
+  const handleDeleteBottomLink = (idx: number) => {
+    const currentLinks = config.footer.bottomLinks || [];
+    const updatedLinks = currentLinks.filter((_, i) => i !== idx);
+    const updatedConfig = {
+      ...config,
+      footer: {
+        ...config.footer,
+        bottomLinks: updatedLinks
+      }
+    };
+    setConfig(updatedConfig);
+    StorageService.saveHomepageConfig(updatedConfig);
+    showToast('Đã xóa liên kết đáy trang!');
+  };
+
+  // Section-specific saving & feedback state
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+  const [savedSection, setSavedSection] = useState<string | null>(null);
+  const [floatingToast, setFloatingToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
+
+  const triggerSaveSection = (sectionKey: string, customMessage?: string) => {
+    setSavingSection(sectionKey);
+    StorageService.saveHomepageConfig(config);
+
+    setTimeout(() => {
+      setSavingSection(null);
+      setSavedSection(sectionKey);
+      const msg = customMessage || 'Đã lưu thành công & Đồng bộ Firestore!';
+      setFloatingToast({ message: msg, type: 'success' });
+      showToast(msg);
+
+      setTimeout(() => {
+        setSavedSection((curr) => (curr === sectionKey ? null : curr));
+      }, 4000);
+
+      setTimeout(() => {
+        setFloatingToast(null);
+      }, 3500);
+    }, 300);
+  };
+
   // Handle Save
   const handleSaveAll = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    StorageService.saveHomepageConfig(config);
-    setIsSaved(true);
-    showToast('Đã lưu toàn bộ cài đặt Trang Chủ thành công!');
-    setTimeout(() => setIsSaved(false), 3000);
+    triggerSaveSection('all', 'Đã lưu toàn bộ cài đặt Trang Chủ & Chân Trang thành công!');
   };
 
   // Handle Reset Defaults
@@ -153,7 +372,27 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-200">
+    <div className="space-y-8 animate-in fade-in duration-200 relative">
+      {/* Floating Toast Notification - Always visible on screen */}
+      {floatingToast && (
+        <div className="fixed top-6 right-6 z-50 max-w-md bg-stone-900 text-white p-4 rounded-2xl shadow-2xl border-2 border-emerald-500 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/40">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div className="flex-1 text-xs">
+            <p className="font-black text-emerald-400 uppercase text-[10px] tracking-wider">Hệ thống đã cập nhật</p>
+            <p className="text-stone-200 text-xs font-semibold mt-0.5">{floatingToast.message}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFloatingToast(null)}
+            className="p-1.5 text-stone-400 hover:text-white rounded-lg cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Top Banner */}
       <div className="p-6 bg-gradient-to-r from-stone-900 via-red-950 to-stone-900 rounded-3xl text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
@@ -197,11 +436,31 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
 
           <button
             type="button"
-            onClick={() => handleSaveAll()}
-            className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md shadow-red-900/40 cursor-pointer"
+            onClick={() => triggerSaveSection('top', 'Đã lưu toàn bộ cài đặt Trang Chủ & đồng bộ Firestore!')}
+            className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md cursor-pointer ${
+              savedSection === 'top'
+                ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-emerald-900/40'
+                : savingSection === 'top'
+                ? 'bg-stone-700 text-white'
+                : 'bg-red-600 hover:bg-red-700 text-white shadow-red-900/40'
+            }`}
           >
-            <Check className="w-4 h-4" />
-            <span>Lưu Thay Đổi</span>
+            {savingSection === 'top' ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Đang lưu...</span>
+              </>
+            ) : savedSection === 'top' ? (
+              <>
+                <Check className="w-4 h-4 text-white" />
+                <span>✓ Đã Lưu!</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Lưu Thay Đổi</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -479,11 +738,32 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
 
               <div className="flex items-center justify-end pt-3">
                 <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-red-700 hover:bg-red-800 text-white font-black text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                  type="button"
+                  onClick={() => triggerSaveSection('hero', 'Đã lưu cài đặt Header & Banner Hero thành công!')}
+                  className={`px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 ${
+                    savedSection === 'hero'
+                      ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-emerald-200'
+                      : savingSection === 'hero'
+                      ? 'bg-stone-700 text-white'
+                      : 'bg-red-700 hover:bg-red-800 text-white shadow-red-200'
+                  }`}
                 >
-                  <Check className="w-4 h-4" />
-                  <span>Lưu Cài Đặt Hero</span>
+                  {savingSection === 'hero' ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Đang lưu lên Firestore...</span>
+                    </>
+                  ) : savedSection === 'hero' ? (
+                    <>
+                      <Check className="w-4 h-4 text-white" />
+                      <span>✓ Đã Lưu Cài Đặt Hero!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Lưu Cài Đặt Hero</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -656,11 +936,32 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
 
             <div className="flex items-center justify-end pt-3">
               <button
-                type="submit"
-                className="px-6 py-2.5 bg-red-700 hover:bg-red-800 text-white font-black text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                type="button"
+                onClick={() => triggerSaveSection('trial', 'Đã lưu cài đặt Mục Đăng Ký Học Miễn Phí thành công!')}
+                className={`px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 ${
+                  savedSection === 'trial'
+                    ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-emerald-200'
+                    : savingSection === 'trial'
+                    ? 'bg-stone-700 text-white'
+                    : 'bg-red-700 hover:bg-red-800 text-white shadow-red-200'
+                }`}
               >
-                <Check className="w-4 h-4" />
-                <span>Lưu Mục Đăng Ký Học Miễn Phí</span>
+                {savingSection === 'trial' ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Đang lưu lên Firestore...</span>
+                  </>
+                ) : savedSection === 'trial' ? (
+                  <>
+                    <Check className="w-4 h-4 text-white" />
+                    <span>✓ Đã Lưu Mục Đăng Ký!</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Lưu Mục Đăng Ký Học Miễn Phí</span>
+                  </>
+                )}
               </button>
             </div>
           </form>
@@ -818,11 +1119,31 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
           <div className="flex items-center justify-end pt-3">
             <button
               type="button"
-              onClick={() => handleSaveAll()}
-              className="px-6 py-2.5 bg-red-700 hover:bg-red-800 text-white font-black text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              onClick={() => triggerSaveSection('faq', 'Đã lưu toàn bộ cài đặt câu hỏi thường gặp FAQ thành công!')}
+              className={`px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 ${
+                savedSection === 'faq'
+                  ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-emerald-200'
+                  : savingSection === 'faq'
+                  ? 'bg-stone-700 text-white'
+                  : 'bg-red-700 hover:bg-red-800 text-white shadow-red-200'
+              }`}
             >
-              <Check className="w-4 h-4" />
-              <span>Lưu Cài Đặt FAQ</span>
+              {savingSection === 'faq' ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Đang lưu lên Firestore...</span>
+                </>
+              ) : savedSection === 'faq' ? (
+                <>
+                  <Check className="w-4 h-4 text-white" />
+                  <span>✓ Đã Lưu Cài Đặt FAQ!</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>Lưu Cài Đặt FAQ</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -832,211 +1153,823 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
       {activeSubTab === 'footer' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Footer Form */}
-          <div className="lg:col-span-7 bg-white rounded-3xl border border-stone-200 p-6 sm:p-7 shadow-sm space-y-6">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-100">
-              <div>
-                <h4 className="text-base font-black text-stone-900 flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-red-700" />
-                  <span>Cấu Hình Chân Trang (Footer & Liên Hệ)</span>
-                </h4>
-                <p className="text-xs text-stone-500 mt-0.5">Thông tin thương hiệu, hotline, email, địa chỉ và mạng xã hội ở chân trang</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveAll} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-stone-700 mb-1">Mô tả giới thiệu thương hiệu (Brand Bio)</label>
-                <textarea
-                  rows={3}
-                  value={config.footer.brandBio}
-                  onChange={(e) => setConfig(prev => ({
-                    ...prev,
-                    footer: { ...prev.footer, brandBio: e.target.value }
-                  }))}
-                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-stone-700 leading-relaxed"
-                />
+          <div className="lg:col-span-7 space-y-6">
+            {/* SECTION 1: Brand Info & Contact */}
+            <div className="bg-white rounded-3xl border border-stone-200 p-6 sm:p-7 shadow-sm space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <div>
+                  <h4 className="text-base font-black text-stone-900 flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-red-700" />
+                    <span>1. Thông Tin Thương Hiệu & Chân Trang</span>
+                  </h4>
+                  <p className="text-xs text-stone-500 mt-0.5">Mô tả tóm tắt, hotline, email, địa chỉ và mạng xã hội</p>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">Mô tả giới thiệu thương hiệu (Brand Bio)</label>
+                  <textarea
+                    rows={3}
+                    value={config.footer.brandBio}
+                    onChange={(e) => setConfig(prev => ({
+                      ...prev,
+                      footer: { ...prev.footer, brandBio: e.target.value }
+                    }))}
+                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-stone-700 leading-relaxed"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1 flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-red-600" />
+                      <span>Hotline hỗ trợ</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={config.footer.hotline}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        footer: { ...prev.footer, hotline: e.target.value }
+                      }))}
+                      placeholder="0988 409 798 / 1900 8888"
+                      className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-bold text-stone-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-red-600" />
+                      <span>Email liên hệ</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={config.footer.email}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        footer: { ...prev.footer, email: e.target.value }
+                      }))}
+                      placeholder="hocmonngon@gmail.com"
+                      className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-stone-900"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block font-bold text-stone-700 mb-1 flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-red-600" />
-                    <span>Hotline hỗ trợ</span>
+                    <MapPin className="w-3.5 h-3.5 text-red-600" />
+                    <span>Địa chỉ văn phòng / cơ sở đào tạo</span>
                   </label>
                   <input
                     type="text"
-                    value={config.footer.hotline}
+                    value={config.footer.address}
                     onChange={(e) => setConfig(prev => ({
                       ...prev,
-                      footer: { ...prev.footer, hotline: e.target.value }
+                      footer: { ...prev.footer, address: e.target.value }
                     }))}
-                    placeholder="0988 409 798 / 1900 8888"
+                    placeholder="19 Lý Thường Kiệt, TP. Vinh & Hà Nội"
+                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-stone-900"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Facebook URL</label>
+                    <input
+                      type="text"
+                      value={config.footer.facebookUrl}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        footer: { ...prev.footer, facebookUrl: e.target.value }
+                      }))}
+                      className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">YouTube URL</label>
+                    <input
+                      type="text"
+                      value={config.footer.youtubeUrl}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        footer: { ...prev.footer, youtubeUrl: e.target.value }
+                      }))}
+                      className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Zalo Link</label>
+                    <input
+                      type="text"
+                      value={config.footer.zaloUrl}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        footer: { ...prev.footer, zaloUrl: e.target.value }
+                      }))}
+                      className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Dòng bản quyền (Copyright)</label>
+                    <input
+                      type="text"
+                      value={config.footer.copyrightText}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        footer: { ...prev.footer, copyrightText: e.target.value }
+                      }))}
+                      className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Huy hiệu bảo mật</label>
+                    <input
+                      type="text"
+                      value={config.footer.securityBadge}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        footer: { ...prev.footer, securityBadge: e.target.value }
+                      }))}
+                      className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-bold text-emerald-700"
+                    />
+                  </div>
+                </div>
+
+                {/* Save Section 1 Button & Feedback */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-stone-200">
+                  <div className="text-[11px] text-stone-500 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Lưu nhanh hotline, email, địa chỉ & thương hiệu</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => triggerSaveSection('section1', 'Đã lưu thông tin thương hiệu, hotline & email thành công!')}
+                    className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95 ${
+                      savedSection === 'section1'
+                        ? 'bg-emerald-600 text-white shadow-emerald-200 ring-2 ring-emerald-400'
+                        : savingSection === 'section1'
+                        ? 'bg-stone-700 text-white'
+                        : 'bg-red-700 hover:bg-red-800 text-white shadow-red-200'
+                    }`}
+                  >
+                    {savingSection === 'section1' ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Đang lưu lên Firestore...</span>
+                      </>
+                    ) : savedSection === 'section1' ? (
+                      <>
+                        <Check className="w-4 h-4 text-white" />
+                        <span>✓ Đã Lưu & Đồng Bộ Thành Công!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Lưu Thông Tin Thương Hiệu & Liên Hệ</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: Cột KHÁM PHÁ (Explore Column) */}
+            <div className="bg-white rounded-3xl border border-stone-200 p-6 sm:p-7 shadow-sm space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <div>
+                  <h4 className="text-base font-black text-stone-900 flex items-center gap-2">
+                    <Compass className="w-5 h-5 text-amber-600" />
+                    <span>2. Tùy Chỉnh Cột: "Khám Phá"</span>
+                  </h4>
+                  <p className="text-xs text-stone-500 mt-0.5">Chỉnh sửa tiêu đề cột và danh sách các khóa học / liên kết trong cột Khám Phá</p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 font-bold text-[11px] border border-amber-200">
+                  {config.footer.exploreColumn?.links?.length || 0} liên kết
+                </span>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">Tiêu đề cột</label>
+                  <input
+                    type="text"
+                    value={config.footer.exploreColumn?.title || 'Khám Phá'}
+                    onChange={(e) => setConfig(prev => ({
+                      ...prev,
+                      footer: {
+                        ...prev.footer,
+                        exploreColumn: {
+                          ...(prev.footer.exploreColumn || { links: [] }),
+                          title: e.target.value
+                        }
+                      }
+                    }))}
+                    placeholder="Khám Phá"
                     className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-bold text-stone-900"
                   />
                 </div>
 
+                {/* Existing Explore Links List */}
+                <div className="space-y-2.5">
+                  <label className="block font-bold text-stone-700">Danh sách liên kết hiện tại:</label>
+                  <div className="space-y-2">
+                    {(config.footer.exploreColumn?.links || []).map((link, idx) => (
+                      <div key={idx} className="p-3 bg-stone-50 rounded-2xl border border-stone-200 flex flex-col sm:flex-row items-start sm:items-center gap-2.5">
+                        <div className="flex-1 w-full sm:w-auto">
+                          <input
+                            type="text"
+                            value={link.label}
+                            onChange={(e) => handleUpdateExploreLink(idx, 'label', e.target.value)}
+                            placeholder="Tên liên kết"
+                            className="w-full p-2 bg-white border border-stone-200 rounded-xl font-bold text-stone-800 text-xs"
+                          />
+                        </div>
+                        <div className="flex-1 w-full sm:w-auto">
+                          <input
+                            type="text"
+                            value={link.url || ''}
+                            onChange={(e) => handleUpdateExploreLink(idx, 'url', e.target.value)}
+                            placeholder="Đường dẫn hoặc trang (VD: catalog, trial)"
+                            className="w-full p-2 bg-white border border-stone-200 rounded-xl text-stone-600 text-xs font-mono"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateExploreLink(idx, 'isHighlight', !link.isHighlight)}
+                            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                              link.isHighlight
+                                ? 'bg-amber-400 text-stone-950 shadow-xs'
+                                : 'bg-stone-200 text-stone-600 hover:bg-stone-300'
+                            }`}
+                            title="Làm nổi bật chữ màu vàng ở chân trang"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            <span>{link.isHighlight ? 'Nổi bật' : 'Chữ thường'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExploreLink(idx)}
+                            className="p-1.5 text-stone-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Xóa liên kết này"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Add New Explore Link Box */}
+                <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200 space-y-3">
+                  <div className="font-bold text-stone-800 text-xs flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Thêm liên kết mới vào cột Khám Phá:</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <input
+                      type="text"
+                      value={newExploreLabel}
+                      onChange={(e) => setNewExploreLabel(e.target.value)}
+                      placeholder="Tên hiển thị (VD: Bánh Âu & Croissant)"
+                      className="p-2.5 bg-white border border-stone-200 rounded-xl text-xs font-medium"
+                    />
+                    <input
+                      type="text"
+                      value={newExploreUrl}
+                      onChange={(e) => setNewExploreUrl(e.target.value)}
+                      placeholder="Đường dẫn (VD: catalog, trial hoặc link web)"
+                      className="p-2.5 bg-white border border-stone-200 rounded-xl text-xs font-mono"
+                    />
+                  </div>
+
+                  {/* Quick Suggestions */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-stone-500 font-bold">Gợi ý nhanh đường dẫn hệ thống:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: 'Tất cả khóa học', url: 'catalog' },
+                        { label: 'Khóa học mở quán', url: 'catalog:category=Mở quán kinh doanh' },
+                        { label: 'Lươn Xứ Nghệ', url: 'catalog:category=Lươn Xứ Nghệ' },
+                        { label: 'Bánh Âu & Croissant', url: 'catalog:category=Bánh Canh' },
+                        { label: 'Đăng ký học thử 0đ', url: 'trial', highlight: true }
+                      ].map((sug, sIdx) => (
+                        <button
+                          key={sIdx}
+                          type="button"
+                          onClick={() => {
+                            setNewExploreLabel(sug.label);
+                            setNewExploreUrl(sug.url);
+                            if (sug.highlight) setNewExploreHighlight(true);
+                          }}
+                          className="px-2 py-1 bg-white hover:bg-amber-100 border border-stone-200 text-stone-700 text-[10px] rounded-lg transition-colors cursor-pointer"
+                        >
+                          + {sug.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer text-stone-700 text-xs font-medium">
+                      <input
+                        type="checkbox"
+                        checked={newExploreHighlight}
+                        onChange={(e) => setNewExploreHighlight(e.target.checked)}
+                        className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
+                      />
+                      <span>Đánh dấu nổi bật màu vàng cam</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={handleAddExploreLink}
+                      className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Thêm Liên Kết</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Save Section 2 Button */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-stone-200">
+                  <div className="text-[11px] text-stone-500 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span>Tự động cập nhật các liên kết cột Khám Phá</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => triggerSaveSection('section2', 'Đã lưu cài đặt cột Khám Phá thành công!')}
+                    className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95 ${
+                      savedSection === 'section2'
+                        ? 'bg-emerald-600 text-white shadow-emerald-200 ring-2 ring-emerald-400'
+                        : savingSection === 'section2'
+                        ? 'bg-stone-700 text-white'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-200'
+                    }`}
+                  >
+                    {savingSection === 'section2' ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Đang lưu lên Firestore...</span>
+                      </>
+                    ) : savedSection === 'section2' ? (
+                      <>
+                        <Check className="w-4 h-4 text-white" />
+                        <span>✓ Đã Lưu Cột Khám Phá!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Lưu Cài Đặt Cột Khám Phá</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: Cột VỀ CHÚNG TÔI (About Us Column) */}
+            <div className="bg-white rounded-3xl border border-stone-200 p-6 sm:p-7 shadow-sm space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-red-600" />
-                    <span>Email liên hệ</span>
-                  </label>
+                  <h4 className="text-base font-black text-stone-900 flex items-center gap-2">
+                    <Info className="w-5 h-5 text-blue-600" />
+                    <span>3. Tùy Chỉnh Cột: "Về Chúng Tôi"</span>
+                  </h4>
+                  <p className="text-xs text-stone-500 mt-0.5">Chỉnh sửa tiêu đề cột và danh sách trang giới thiệu, chính sách, cam kết</p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-bold text-[11px] border border-blue-200">
+                  {config.footer.aboutColumn?.links?.length || 0} liên kết
+                </span>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">Tiêu đề cột</label>
                   <input
                     type="text"
-                    value={config.footer.email}
+                    value={config.footer.aboutColumn?.title || 'Về Chúng Tôi'}
                     onChange={(e) => setConfig(prev => ({
                       ...prev,
-                      footer: { ...prev.footer, email: e.target.value }
+                      footer: {
+                        ...prev.footer,
+                        aboutColumn: {
+                          ...(prev.footer.aboutColumn || { links: [] }),
+                          title: e.target.value
+                        }
+                      }
                     }))}
-                    placeholder="hocmonngon@gmail.com"
-                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-stone-900"
+                    placeholder="Về Chúng Tôi"
+                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-bold text-stone-900"
                   />
+                </div>
+
+                {/* Existing About Links List */}
+                <div className="space-y-2.5">
+                  <label className="block font-bold text-stone-700">Danh sách liên kết hiện tại:</label>
+                  <div className="space-y-2">
+                    {(config.footer.aboutColumn?.links || []).map((link, idx) => (
+                      <div key={idx} className="p-3 bg-stone-50 rounded-2xl border border-stone-200 flex flex-col sm:flex-row items-start sm:items-center gap-2.5">
+                        <div className="flex-1 w-full sm:w-auto">
+                          <input
+                            type="text"
+                            value={link.label}
+                            onChange={(e) => handleUpdateAboutLink(idx, 'label', e.target.value)}
+                            placeholder="Tên liên kết"
+                            className="w-full p-2 bg-white border border-stone-200 rounded-xl font-bold text-stone-800 text-xs"
+                          />
+                        </div>
+                        <div className="flex-1 w-full sm:w-auto">
+                          <input
+                            type="text"
+                            value={link.url || ''}
+                            onChange={(e) => handleUpdateAboutLink(idx, 'url', e.target.value)}
+                            placeholder="Đường dẫn (VD: # hoặc link web)"
+                            className="w-full p-2 bg-white border border-stone-200 rounded-xl text-stone-600 text-xs font-mono"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAboutLink(idx)}
+                          className="p-1.5 text-stone-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                          title="Xóa liên kết này"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Add New About Link Box */}
+                <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200 space-y-3">
+                  <div className="font-bold text-stone-800 text-xs flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5 text-blue-700" />
+                    <span>Thêm liên kết mới vào cột Về Chúng Tôi:</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <input
+                      type="text"
+                      value={newAboutLabel}
+                      onChange={(e) => setNewAboutLabel(e.target.value)}
+                      placeholder="Tên hiển thị (VD: Câu chuyện thương hiệu)"
+                      className="p-2.5 bg-white border border-stone-200 rounded-xl text-xs font-medium"
+                    />
+                    <input
+                      type="text"
+                      value={newAboutUrl}
+                      onChange={(e) => setNewAboutUrl(e.target.value)}
+                      placeholder="Đường dẫn (VD: # hoặc link web)"
+                      className="p-2.5 bg-white border border-stone-200 rounded-xl text-xs font-mono"
+                    />
+                  </div>
+
+                  {/* Quick Suggestions */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-stone-500 font-bold">Gợi ý nhanh:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: 'Đội ngũ giảng viên', url: 'catalog:filterChef=true' },
+                        { label: 'Câu chuyện thương hiệu', url: '#' },
+                        { label: 'Chính sách bảo mật', url: '#' },
+                        { label: 'Điều khoản dịch vụ', url: '#' },
+                        { label: 'Cam kết hoàn tiền', url: '#' }
+                      ].map((sug, sIdx) => (
+                        <button
+                          key={sIdx}
+                          type="button"
+                          onClick={() => {
+                            setNewAboutLabel(sug.label);
+                            setNewAboutUrl(sug.url);
+                          }}
+                          className="px-2 py-1 bg-white hover:bg-blue-100 border border-stone-200 text-stone-700 text-[10px] rounded-lg transition-colors cursor-pointer"
+                        >
+                          + {sug.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={handleAddAboutLink}
+                      className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Thêm Liên Kết</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Save Section 3 Button */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-stone-200">
+                  <div className="text-[11px] text-stone-500 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                    <span>Tự động cập nhật các liên kết cột Về Chúng Tôi</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => triggerSaveSection('section3', 'Đã lưu cài đặt cột Về Chúng Tôi thành công!')}
+                    className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95 ${
+                      savedSection === 'section3'
+                        ? 'bg-emerald-600 text-white shadow-emerald-200 ring-2 ring-emerald-400'
+                        : savingSection === 'section3'
+                        ? 'bg-stone-700 text-white'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
+                    }`}
+                  >
+                    {savingSection === 'section3' ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Đang lưu lên Firestore...</span>
+                      </>
+                    ) : savedSection === 'section3' ? (
+                      <>
+                        <Check className="w-4 h-4 text-white" />
+                        <span>✓ Đã Lưu Cột Về Chúng Tôi!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Lưu Cài Đặt Cột Về Chúng Tôi</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 4: Tiêu đề Cột Hỗ Trợ & Liên Kết Đáy Chân Trang */}
+            <div className="bg-white rounded-3xl border border-stone-200 p-6 sm:p-7 shadow-sm space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <div>
+                  <h4 className="text-base font-black text-stone-900 flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-stone-700" />
+                    <span>4. Cột Hỗ Trợ & Liên Kết Đáy Chân Trang</span>
+                  </h4>
+                  <p className="text-xs text-stone-500 mt-0.5">Tiêu đề cột liên hệ và các liên kết chính sách ở dòng chân trang</p>
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-stone-700 mb-1 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-red-600" />
-                  <span>Địa chỉ văn phòng / cơ sở đào tạo</span>
-                </label>
-                <input
-                  type="text"
-                  value={config.footer.address}
-                  onChange={(e) => setConfig(prev => ({
-                    ...prev,
-                    footer: { ...prev.footer, address: e.target.value }
-                  }))}
-                  placeholder="19 Lý Thường Kiệt, TP. Vinh & Hà Nội"
-                  className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-stone-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <div className="space-y-4 text-xs">
                 <div>
-                  <label className="block font-bold text-stone-700 mb-1">Facebook URL</label>
+                  <label className="block font-bold text-stone-700 mb-1">Tiêu đề Cột 4 (Liên hệ)</label>
                   <input
                     type="text"
-                    value={config.footer.facebookUrl}
+                    value={config.footer.contactTitle || 'Hỗ Trợ & Liên Hệ'}
                     onChange={(e) => setConfig(prev => ({
                       ...prev,
-                      footer: { ...prev.footer, facebookUrl: e.target.value }
+                      footer: { ...prev.footer, contactTitle: e.target.value }
                     }))}
-                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">YouTube URL</label>
-                  <input
-                    type="text"
-                    value={config.footer.youtubeUrl}
-                    onChange={(e) => setConfig(prev => ({
-                      ...prev,
-                      footer: { ...prev.footer, youtubeUrl: e.target.value }
-                    }))}
-                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">Zalo Link</label>
-                  <input
-                    type="text"
-                    value={config.footer.zaloUrl}
-                    onChange={(e) => setConfig(prev => ({
-                      ...prev,
-                      footer: { ...prev.footer, zaloUrl: e.target.value }
-                    }))}
-                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">Dòng bản quyền (Copyright)</label>
-                  <input
-                    type="text"
-                    value={config.footer.copyrightText}
-                    onChange={(e) => setConfig(prev => ({
-                      ...prev,
-                      footer: { ...prev.footer, copyrightText: e.target.value }
-                    }))}
-                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl"
+                    placeholder="Hỗ Trợ & Liên Hệ"
+                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-bold text-stone-900"
                   />
                 </div>
 
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">Huy hiệu bảo mật</label>
-                  <input
-                    type="text"
-                    value={config.footer.securityBadge}
-                    onChange={(e) => setConfig(prev => ({
-                      ...prev,
-                      footer: { ...prev.footer, securityBadge: e.target.value }
-                    }))}
-                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-bold text-emerald-700"
-                  />
+                {/* Bottom links */}
+                <div className="space-y-2">
+                  <label className="block font-bold text-stone-700">Các liên kết đáy chân trang (kế bên Copyright):</label>
+                  <div className="space-y-2">
+                    {(config.footer.bottomLinks || []).map((bLink, bIdx) => (
+                      <div key={bIdx} className="p-2.5 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="font-bold text-stone-800">{bLink.label}</span>
+                          <span className="text-stone-400 font-mono text-[10px]">({bLink.url || '#'})</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBottomLink(bIdx)}
+                          className="text-stone-400 hover:text-red-700 p-1 rounded transition-colors cursor-pointer"
+                          title="Xóa liên kết"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={newBottomLabel}
+                      onChange={(e) => setNewBottomLabel(e.target.value)}
+                      placeholder="Tên liên kết đáy (VD: Hỗ trợ học viên)"
+                      className="p-2 bg-stone-50 border border-stone-200 rounded-xl flex-1 text-xs"
+                    />
+                    <input
+                      type="text"
+                      value={newBottomUrl}
+                      onChange={(e) => setNewBottomUrl(e.target.value)}
+                      placeholder="URL (VD: #)"
+                      className="p-2 bg-stone-50 border border-stone-200 rounded-xl w-28 text-xs font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddBottomLink}
+                      className="px-3.5 py-2 bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs rounded-xl cursor-pointer shrink-0"
+                    >
+                      + Thêm
+                    </button>
+                  </div>
+                </div>
+
+                {/* Save Section 4 Button */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-stone-200">
+                  <div className="text-[11px] text-stone-500 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-stone-500 animate-pulse"></span>
+                    <span>Lưu tiêu đề hỗ trợ & liên kết đáy bản quyền</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => triggerSaveSection('section4', 'Đã lưu cài đặt Cột Hỗ Trợ & Liên Kết Đáy!')}
+                    className={`w-full sm:w-auto px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95 ${
+                      savedSection === 'section4'
+                        ? 'bg-emerald-600 text-white shadow-emerald-200 ring-2 ring-emerald-400'
+                        : savingSection === 'section4'
+                        ? 'bg-stone-700 text-white'
+                        : 'bg-stone-800 hover:bg-black text-white shadow-stone-200'
+                    }`}
+                  >
+                    {savingSection === 'section4' ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Đang lưu lên Firestore...</span>
+                      </>
+                    ) : savedSection === 'section4' ? (
+                      <>
+                        <Check className="w-4 h-4 text-white" />
+                        <span>✓ Đã Lưu Liên Kết Đáy!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Lưu Cài Đặt Cột Hỗ Trợ & Đáy Trang</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
+            </div>
 
-              <div className="flex items-center justify-end pt-3">
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-red-700 hover:bg-red-800 text-white font-black text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Lưu Cài Đặt Footer</span>
-                </button>
+            {/* Save All Footer Button Card */}
+            <div className="p-5 bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 rounded-3xl border border-stone-700 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-white text-xs space-y-1">
+                <p className="font-black text-sm flex items-center gap-2 text-white">
+                  <Globe className="w-4 h-4 text-red-500" />
+                  <span>Lưu Toàn Bộ Cài Đặt Chân Trang (Footer)</span>
+                </p>
+                <p className="text-stone-300 text-[11px]">
+                  Cập nhật tất cả 4 khối chân trang và đồng bộ tức thì lên đám mây Firestore & Vercel.
+                </p>
               </div>
-            </form>
+              <button
+                type="button"
+                onClick={() => triggerSaveSection('all', 'Đã lưu toàn bộ cài đặt chân trang Footer & đồng bộ Firestore!')}
+                className={`w-full sm:w-auto px-7 py-3.5 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 shrink-0 ${
+                  savedSection === 'all'
+                    ? 'bg-emerald-600 text-white ring-2 ring-emerald-400 shadow-emerald-900/50'
+                    : savingSection === 'all'
+                    ? 'bg-stone-700 text-white'
+                    : 'bg-red-600 hover:bg-red-700 text-white shadow-red-900/50'
+                }`}
+              >
+                {savingSection === 'all' ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Đang lưu & đồng bộ Firestore...</span>
+                  </>
+                ) : savedSection === 'all' ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                    <span>✓ Đã Lưu & Đồng Bộ Thành Công!</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>LƯU TẤT CẢ CÀI ĐẶT FOOTER</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Footer Preview (Matching image_37b4723f.png) */}
-          <div className="lg:col-span-5 bg-stone-900 text-stone-300 rounded-3xl p-6 shadow-xl space-y-5">
+          {/* Footer Live Preview (Matching Real 4-Column Layout) */}
+          <div className="lg:col-span-5 bg-stone-900 text-stone-300 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-6 sticky top-6 border border-stone-800">
             <div className="flex items-center justify-between pb-3 border-b border-stone-800 text-xs">
               <span className="font-black text-white flex items-center gap-1.5">
                 <Eye className="w-4 h-4 text-red-500" />
-                Xem Trước Footer Thực Tế
+                <span>Xem Trước Footer Thực Tế (4 Cột)</span>
               </span>
               <span className="text-[10px] bg-red-600/30 text-red-300 font-bold px-2 py-0.5 rounded border border-red-500/30">
-                Dark Mode
+                Live Preview
               </span>
             </div>
 
-            <div className="space-y-4 text-xs">
-              {/* Brand Logo in preview */}
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center text-white font-bold">
-                  🍴
+            {/* 4 Columns Preview */}
+            <div className="space-y-6 text-xs">
+              {/* Column 1: Brand Info */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-red-600 flex items-center justify-center text-white font-bold text-sm">
+                    🍴
+                  </div>
+                  <span className="text-lg font-black text-white font-serif-heading">
+                    {config.footer.brandName || 'Học Món Ngon'}
+                  </span>
                 </div>
-                <span className="text-lg font-black text-white font-serif-heading">
-                  {config.footer.brandName}
-                </span>
+
+                <p className="text-[11px] text-stone-400 leading-relaxed">
+                  {config.footer.brandBio}
+                </p>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <div className="w-7 h-7 rounded-full bg-stone-800 text-white flex items-center justify-center text-[10px]">
+                    f
+                  </div>
+                  <div className="w-7 h-7 rounded-full bg-stone-800 text-white flex items-center justify-center text-[10px]">
+                    ▶
+                  </div>
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-stone-800 text-[10px] text-emerald-400 font-bold">
+                    <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                    <span>{config.footer.securityBadge || 'Bảo mật SSL 256-bit'}</span>
+                  </div>
+                </div>
               </div>
 
-              <p className="text-[11px] text-stone-400 leading-relaxed">
-                {config.footer.brandBio}
-              </p>
+              {/* 2 Middle Columns in Grid for Preview */}
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-stone-800/80">
+                {/* Column 2: Khám Phá */}
+                <div className="space-y-2">
+                  <h5 className="text-[11px] font-black text-white uppercase tracking-wider">
+                    {config.footer.exploreColumn?.title || 'KHÁM PHÁ'}
+                  </h5>
+                  <ul className="space-y-1.5 text-[11px] text-stone-400">
+                    {(config.footer.exploreColumn?.links || []).map((link, idx) => (
+                      <li key={idx} className={link.isHighlight ? 'text-amber-400 font-bold' : 'hover:text-stone-200'}>
+                        {link.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
 
-              <div className="space-y-2 pt-2 border-t border-stone-800 text-[11px]">
-                <p className="flex items-center gap-2 text-stone-300">
-                  <Phone className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                  <span>{config.footer.hotline}</span>
-                </p>
-                <p className="flex items-center gap-2 text-stone-300">
-                  <Mail className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                  <span>{config.footer.email}</span>
-                </p>
-                <p className="flex items-center gap-2 text-stone-300">
-                  <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                  <span>{config.footer.address}</span>
-                </p>
+                {/* Column 3: Về Chúng Tôi */}
+                <div className="space-y-2">
+                  <h5 className="text-[11px] font-black text-white uppercase tracking-wider">
+                    {config.footer.aboutColumn?.title || 'VỀ CHÚNG TÔI'}
+                  </h5>
+                  <ul className="space-y-1.5 text-[11px] text-stone-400">
+                    {(config.footer.aboutColumn?.links || []).map((link, idx) => (
+                      <li key={idx} className="hover:text-stone-200">
+                        {link.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-stone-800 flex items-center justify-between text-[10px] text-stone-500">
+              {/* Column 4: Contact Preview */}
+              <div className="space-y-2 pt-4 border-t border-stone-800/80">
+                <h5 className="text-[11px] font-black text-white uppercase tracking-wider">
+                  {config.footer.contactTitle || 'HỖ TRỢ & LIÊN HỆ'}
+                </h5>
+                <div className="space-y-1.5 text-[11px] text-stone-300">
+                  <p className="flex items-center gap-2">
+                    <Phone className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span>Hotline: {config.footer.hotline}</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <Mail className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span>{config.footer.email}</span>
+                  </p>
+                  <p className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span>{config.footer.address}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Copyright & Policy Preview */}
+              <div className="pt-4 border-t border-stone-800 flex flex-col gap-2 text-[10px] text-stone-500">
                 <span>{config.footer.copyrightText}</span>
-                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  {config.footer.securityBadge}
-                </span>
+                <div className="flex flex-wrap items-center gap-3 text-stone-400">
+                  {(config.footer.bottomLinks || []).map((bLink, bIdx) => (
+                    <span key={bIdx} className="hover:underline">
+                      {bLink.label}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

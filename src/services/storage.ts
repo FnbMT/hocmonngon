@@ -89,7 +89,33 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     youtubeUrl: 'https://youtube.com',
     zaloUrl: 'https://zalo.me/0988409798',
     copyrightText: '© 2026 Học Món Ngon. Tất cả các quyền được bảo lưu.',
-    securityBadge: 'Bảo mật SSL 256-bit'
+    securityBadge: 'Bảo mật SSL 256-bit',
+    exploreColumn: {
+      title: 'Khám Phá',
+      links: [
+        { label: 'Tất cả khóa học', url: 'catalog' },
+        { label: 'Khóa học mở quán', url: 'catalog:category=Mở quán kinh doanh' },
+        { label: 'Lươn Xứ Nghệ', url: 'catalog:category=Lươn Xứ Nghệ' },
+        { label: 'Bánh Âu & Croissant', url: 'catalog:category=Bánh Canh' },
+        { label: 'Đăng ký học thử 0đ', url: 'trial', isHighlight: true }
+      ]
+    },
+    aboutColumn: {
+      title: 'Về Chúng Tôi',
+      links: [
+        { label: 'Đội ngũ giảng viên', url: 'catalog:filterChef=true' },
+        { label: 'Câu chuyện thương hiệu', url: '#' },
+        { label: 'Chính sách bảo mật', url: '#' },
+        { label: 'Điều khoản dịch vụ', url: '#' },
+        { label: 'Cam kết hoàn tiền', url: '#' }
+      ]
+    },
+    contactTitle: 'Hỗ Trợ & Liên Hệ',
+    bottomLinks: [
+      { label: 'Điều khoản dịch vụ', url: '#' },
+      { label: 'Chính sách bảo mật', url: '#' },
+      { label: 'Hỗ trợ học viên', url: '#' }
+    ]
   }
 };
 
@@ -906,7 +932,26 @@ export const StorageService = {
         ...(saved?.faq || {}),
         items: saved?.faq?.items || DEFAULT_HOMEPAGE_CONFIG.faq.items
       },
-      footer: { ...DEFAULT_HOMEPAGE_CONFIG.footer, ...(saved?.footer || {}) }
+      footer: {
+        ...DEFAULT_HOMEPAGE_CONFIG.footer,
+        ...(saved?.footer || {}),
+        exploreColumn: {
+          title: saved?.footer?.exploreColumn?.title || DEFAULT_HOMEPAGE_CONFIG.footer.exploreColumn.title,
+          links: Array.isArray(saved?.footer?.exploreColumn?.links) && saved.footer.exploreColumn.links.length > 0
+            ? saved.footer.exploreColumn.links
+            : DEFAULT_HOMEPAGE_CONFIG.footer.exploreColumn.links
+        },
+        aboutColumn: {
+          title: saved?.footer?.aboutColumn?.title || DEFAULT_HOMEPAGE_CONFIG.footer.aboutColumn.title,
+          links: Array.isArray(saved?.footer?.aboutColumn?.links) && saved.footer.aboutColumn.links.length > 0
+            ? saved.footer.aboutColumn.links
+            : DEFAULT_HOMEPAGE_CONFIG.footer.aboutColumn.links
+        },
+        contactTitle: saved?.footer?.contactTitle || DEFAULT_HOMEPAGE_CONFIG.footer.contactTitle,
+        bottomLinks: Array.isArray(saved?.footer?.bottomLinks) && saved.footer.bottomLinks.length > 0
+          ? saved.footer.bottomLinks
+          : DEFAULT_HOMEPAGE_CONFIG.footer.bottomLinks
+      }
     };
   },
 

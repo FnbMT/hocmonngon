@@ -20,6 +20,26 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
 
   const { footer } = homeConfig;
 
+  const handleLinkClick = (url?: string) => {
+    if (!url || url === '#') return;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    if (url.startsWith('catalog')) {
+      if (url.includes(':category=')) {
+        const cat = decodeURIComponent(url.split(':category=')[1]);
+        onNavigate('catalog', { category: cat });
+      } else if (url.includes(':filterChef=true')) {
+        onNavigate('catalog', { filterChef: true });
+      } else {
+        onNavigate('catalog');
+      }
+      return;
+    }
+    onNavigate(url);
+  };
+
   return (
     <footer className="bg-stone-900 text-stone-300 pt-16 pb-12 border-t border-stone-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -61,58 +81,52 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          {/* Quick links */}
+          {/* Column 2: Khám Phá */}
           <div>
             <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
-              Khám Phá
+              {footer.exploreColumn?.title || 'Khám Phá'}
             </h4>
             <ul className="space-y-2.5 text-sm text-stone-400">
-              <li>
-                <button onClick={() => onNavigate('catalog')} className="hover:text-red-400 transition-colors">
-                  Tất cả khóa học
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onNavigate('catalog', { category: 'Mở quán kinh doanh' })} className="hover:text-red-400 transition-colors">
-                  Khóa học mở quán
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onNavigate('catalog', { category: 'Lươn Xứ Nghệ' })} className="hover:text-red-400 transition-colors">
-                  Lươn Xứ Nghệ
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onNavigate('catalog', { category: 'Bánh Canh' })} className="hover:text-red-400 transition-colors">
-                  Bánh Âu & Croissant
-                </button>
-              </li>
-              <li>
-                <button onClick={() => onNavigate('trial')} className="hover:text-red-400 transition-colors font-medium text-amber-400">
-                  Đăng ký học thử 0đ
-                </button>
-              </li>
+              {(footer.exploreColumn?.links || []).map((link, idx) => (
+                <li key={idx}>
+                  <button 
+                    onClick={() => handleLinkClick(link.url)} 
+                    className={`hover:text-red-400 transition-colors text-left cursor-pointer ${
+                      link.isHighlight ? 'text-amber-400 font-semibold' : ''
+                    }`}
+                  >
+                    {link.label}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* About Us */}
+          {/* Column 3: Về Chúng Tôi */}
           <div>
             <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
-              Về Chúng Tôi
+              {footer.aboutColumn?.title || 'Về Chúng Tôi'}
             </h4>
             <ul className="space-y-2.5 text-sm text-stone-400">
-              <li><a href="#" className="hover:text-white transition-colors">Đội ngũ giảng viên</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Câu chuyện thương hiệu</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Chính sách bảo mật</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Điều khoản dịch vụ</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Cam kết hoàn tiền</a></li>
+              {(footer.aboutColumn?.links || []).map((link, idx) => (
+                <li key={idx}>
+                  <button 
+                    onClick={() => handleLinkClick(link.url)} 
+                    className={`hover:text-white transition-colors text-left cursor-pointer ${
+                      link.isHighlight ? 'text-amber-400 font-semibold' : ''
+                    }`}
+                  >
+                    {link.label}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Column 4: Contact */}
           <div>
             <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4">
-              Hỗ Trợ & Liên Hệ
+              {footer.contactTitle || 'Hỗ Trợ & Liên Hệ'}
             </h4>
             <ul className="space-y-3 text-sm text-stone-400">
               <li className="flex items-start gap-2.5">
@@ -133,10 +147,20 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
 
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 gap-4">
           <p>{footer.copyrightText || '© 2026 Học Món Ngon. Tất cả các quyền được bảo lưu.'}</p>
-          <div className="flex items-center gap-6">
-            <a href="#" className="hover:underline">Điều khoản dịch vụ</a>
-            <a href="#" className="hover:underline">Chính sách bảo mật</a>
-            <a href="#" className="hover:underline">Hỗ trợ học viên</a>
+          <div className="flex flex-wrap items-center gap-6">
+            {(footer.bottomLinks || [
+              { label: 'Điều khoản dịch vụ', url: '#' },
+              { label: 'Chính sách bảo mật', url: '#' },
+              { label: 'Hỗ trợ học viên', url: '#' }
+            ]).map((link, idx) => (
+              <button 
+                key={idx} 
+                onClick={() => handleLinkClick(link.url)} 
+                className="hover:underline cursor-pointer"
+              >
+                {link.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>

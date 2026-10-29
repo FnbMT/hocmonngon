@@ -200,6 +200,18 @@ export interface FaqItem {
   answer: string;
 }
 
+export interface FooterLinkItem {
+  id?: string;
+  label: string;
+  url?: string;
+  isHighlight?: boolean;
+}
+
+export interface FooterColumn {
+  title: string;
+  links: FooterLinkItem[];
+}
+
 export interface HomepageConfig {
   header: {
     brandName: string;
@@ -245,5 +257,9 @@ export interface HomepageConfig {
     zaloUrl: string;
     copyrightText: string;
     securityBadge: string;
+    exploreColumn: FooterColumn;
+    aboutColumn: FooterColumn;
+    contactTitle?: string;
+    bottomLinks?: FooterLinkItem[];
   };
 }
