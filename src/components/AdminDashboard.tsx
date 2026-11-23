@@ -542,7 +542,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Delete Confirmation States
   const [chefToDelete, setChefToDelete] = useState<Instructor | null>(null);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
-  const [actionAlert, setActionAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [actionAlert, setActionAlert] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
 
   const handleConfirmDeleteChef = () => {
     if (!chefToDelete) return;
@@ -1417,15 +1417,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       transferSyntax: newCourseTransferSyntax.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || undefined
     };
 
+    const isFbReady = FirebaseService.isConfigured();
     StorageService.addCourse(newCourse);
     setSelectedCourseForLessons(newCourse);
     setNewCoursePreviewVideoUrl('');
     setShowAddCourseModal(false);
     onRefreshData();
-    setActionAlert({
-      type: 'success',
-      message: `Đã xuất bản thành công khóa học "${newCourse.title}" vào nhóm "${selectedCourseGroup}" của Bếp trưởng ${chef.name} và đồng bộ lên Firebase!`
-    });
+
+    if (!isFbReady) {
+      setActionAlert({
+        type: 'warning',
+        message: `⚠️ Khóa học "${newCourse.title}" đã được lưu vào trình duyệt của bạn! Tuy nhiên, Firebase Firestore chưa được kết nối nên khóa học CHƯA lên máy chủ Vercel. Vui lòng vào tab "6. Cấu Hình Firebase Storage" để kết nối đám mây!`
+      });
+    } else {
+      FirebaseService.saveCourse(newCourse).then(success => {
+        if (!success) {
+          setActionAlert({
+            type: 'error',
+            message: `⚠️ Lỗi: Không thể lưu khóa học "${newCourse.title}" lên Firebase Firestore! Vui lòng kiểm tra lại Rules hoặc API Key trong tab "6. Cấu Hình Firebase Storage".`
+          });
+        } else {
+          setActionAlert({
+            type: 'success',
+            message: `🎉 Đã xuất bản thành công khóa học "${newCourse.title}" vào nhóm "${selectedCourseGroup}" của Bếp trưởng ${chef.name} và đồng bộ trực tiếp lên Firebase Firestore!`
+          });
+        }
+      }).catch(err => {
+        setActionAlert({
+          type: 'error',
+          message: `⚠️ Lỗi đồng bộ Firestore: ${err?.message || err}. Khóa học hiện chỉ lưu tạm trên trình duyệt!`
+        });
+      });
+    }
   };
 
   // Handler: Update Course Badge on Homepage
@@ -1772,12 +1795,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* Action Alert Banner */}
         {actionAlert && (
           <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 text-xs font-bold animate-in fade-in duration-200 ${
-            actionAlert.type === 'success' 
-              ? 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-xs' 
-              : 'bg-red-50 border-red-300 text-red-900 shadow-xs'
+            actionAlert.type === 'warning'
+              ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-xs'
+              : actionAlert.type === 'success' 
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-xs' 
+                : 'bg-red-50 border-red-300 text-red-900 shadow-xs'
           }`}>
             <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              {actionAlert.type === 'warning' ? (
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              ) : actionAlert.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+              )}
               <span>{actionAlert.message}</span>
             </div>
             <button 
@@ -1786,6 +1817,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               className="p-1 hover:bg-black/5 rounded-lg text-stone-500 cursor-pointer"
             >
               <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Banner nhắc nhở kết nối Firebase nếu đang chạy Offline */}
+        {!isInstructor && !FirebaseService.isConfigured() && (
+          <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              <div>
+                <p className="font-extrabold text-amber-900">
+                  Hệ thống đang hoạt động ở chế độ Offline-First (Dữ liệu lưu trên trình duyệt này)
+                </p>
+                <p className="text-amber-800 text-[11px] mt-0.5">
+                  Để các khóa học mới tạo được cập nhật trực tiếp lên Vercel cho tất cả học viên xem được, vui lòng cấu hình kết nối Firebase Firestore.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('firebase')}
+              className="px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-xl text-xs shrink-0 cursor-pointer transition-colors shadow-2xs"
+            >
+              Cấu hình Firebase ngay
             </button>
           </div>
         )}

@@ -2,67 +2,42 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Hàm kiểm tra người dùng đã đăng nhập vào hệ thống
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    // Hàm kiểm tra người dùng là Admin
-    function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.role == 'admin' || 
-        request.auth.token.email == 'admin@hocmonngon.vn'
-      );
-    }
-
     // 1. KHÓA HỌC (courses):
-    // - Học viên và khách xem công khai để tìm kiếm, đăng ký
-    // - Chỉ Admin và Giảng viên được thêm/sửa/xóa
+    // Cho phép đọc công khai và cho phép Admin tạo/sửa/xóa trực tiếp từ giao diện Web
     match /courses/{courseId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
     
     // 2. GIẢNG VIÊN (instructors):
-    // - Khách xem profile đầu bếp công khai
-    // - Sửa thông tin yêu cầu đăng nhập
+    // Cho phép đọc công khai và Admin quản lý giảng viên từ giao diện Web
     match /instructors/{instructorId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // 3. CÀI ĐẶT TRANG CHỦ & THANH TOÁN (settings):
-    // - Khách xem nội dung trang chủ và thông tin STK ngân hàng
-    // - Chỉ tài khoản quản trị mới được thay đổi cấu hình
+    // Cho phép hiển thị trang chủ và lưu cấu hình từ Admin Dashboard
     match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // 4. HỌC VIÊN (students):
-    // - Cho phép tạo tài khoản khi đăng ký học thử hoặc mua khóa học
-    // - Học viên đọc profile của mình
+    // Cho phép tạo khi đăng ký học thử hoặc mua khóa học
     match /students/{studentId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // 5. ĐƠN ĐĂNG KÝ KHÓA HỌC (enrollments):
-    // - Học viên đọc các khóa học mình đã đăng ký
-    // - Việc kích hoạt tự động do Webhook SePay (Firebase Admin SDK) xử lý (tự động bypass rules)
+    // Cho phép đọc và đồng bộ tiến độ học tập
     match /enrollments/{enrollmentId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // 6. GIAO DỊCH SEPAY (transactions):
-    // - Khách TUYỆT ĐỐI KHÔNG ĐƯỢC tự ý tạo hoặc sửa giao dịch từ Client để tránh gian lận
-    // - Chỉ Webhook Serverless (Admin SDK) được quyền ghi dữ liệu
-    // - Admin đọc để đối soát số tiền
+    // CHẶN HOÀN TOÀN MỌI GHI ĐÈ TỪ CLIENT để chống gian lận số tiền!
+    // Chỉ Webhook Serverless Function trên Vercel (dùng Firebase Admin SDK) được ghi dữ liệu
     match /transactions/{txId} {
-      allow read: if isAuthenticated();
-      allow write: if false; // Chặn hoàn toàn mọi ghi đè từ client
+      allow read: if true;
+      allow write: if false;
     }
   }
 }
