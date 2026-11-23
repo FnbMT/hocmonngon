@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Layout, 
   Sparkles, 
@@ -40,6 +40,20 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
   const [config, setConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
   const [activeSubTab, setActiveSubTab] = useState<'hero' | 'trial' | 'faq' | 'footer'>('hero');
   const [isSaved, setIsSaved] = useState(false);
+  const skipNextRemoteSyncRef = useRef(false);
+
+  useEffect(() => {
+    const handleRemoteHomepageUpdate = () => {
+      if (skipNextRemoteSyncRef.current) {
+        skipNextRemoteSyncRef.current = false;
+        return;
+      }
+      const latest = StorageService.getHomepageConfig();
+      setConfig(prev => (JSON.stringify(prev) === JSON.stringify(latest) ? prev : latest));
+    };
+    window.addEventListener('homepage_config_updated', handleRemoteHomepageUpdate);
+    return () => window.removeEventListener('homepage_config_updated', handleRemoteHomepageUpdate);
+  }, []);
 
   // FAQ management state
   const [editingFaqIndex, setEditingFaqIndex] = useState<number | null>(null);
@@ -249,6 +263,7 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
 
   const triggerSaveSection = (sectionKey: string, customMessage?: string) => {
     setSavingSection(sectionKey);
+    skipNextRemoteSyncRef.current = true;
     StorageService.saveHomepageConfig(config);
 
     setTimeout(() => {

@@ -14,6 +14,8 @@ export interface Instructor {
   username?: string;
   password?: string;
   email?: string;
+  courseGroups?: string[];
+  sortOrder?: number;
 }
 
 export interface Lesson {
@@ -24,7 +26,10 @@ export interface Lesson {
   isFreeTrial: boolean;
   requirePaymentForDoc?: boolean; // If true, document is locked for non-paid users even if video is free
   videoUrl: string; // YouTube embed/unlisted URL or standard video ID
-  recipeDocumentUrl?: string; // Google Drive or Firebase PDF link
+  recipeDocumentUrl?: string; // Google Drive, Firebase PDF link, or uploaded file data URL
+  recipeDocumentName?: string;
+  excelCostSheetUrl?: string; // Excel / Google Sheets link or uploaded .xlsx/.csv file data URL
+  excelCostSheetName?: string;
   recipeText?: string;
   order: number;
 }
@@ -46,6 +51,7 @@ export interface Course {
   instructorName: string;
   instructorAvatar: string;
   category: string;
+  courseGroup?: string; // Nhóm khóa học thuộc giảng viên hiển thị trên Trang Chủ (vd: 'KHÓA HỌC ONLINE MỞ QUÁN')
   tag?: 'Bán chạy' | 'Khóa mới' | 'Có học thử' | 'Hot Trend' | 'Được yêu thích' | 'Masterclass' | string;
   badge?: string; // Huy hiệu nổi bật hiển thị trên ảnh bìa trang chủ (vd: 'Bán chạy nhất', 'Chuyên sâu mở quán', 'Công thức độc quyền', 'none')
   badgeColor?: 'red' | 'dark' | 'amber' | 'emerald' | 'purple' | 'blue';

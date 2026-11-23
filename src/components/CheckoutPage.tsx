@@ -19,13 +19,15 @@ import { PaymentService } from '../services/paymentService';
 
 interface CheckoutPageProps {
   course: Course;
+  cartCourses?: Course[];
   currentUser: Student | null;
-  onPaymentSuccess: (studentData: { name: string; phone: string; email: string }) => void;
+  onPaymentSuccess: (studentData: { name: string; phone: string; email: string }, purchasedCourses?: Course[]) => void;
   onNavigate: (view: string) => void;
 }
 
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   course,
+  cartCourses,
   currentUser,
   onPaymentSuccess,
   onNavigate
@@ -56,9 +58,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     return () => window.removeEventListener('payment_config_updated', handleConfigChange);
   }, []);
 
+  const orderItems = cartCourses && cartCourses.length > 0 ? cartCourses : [course];
+  const primaryCourse = orderItems[0] || course;
+  const totalOriginalPrice = orderItems.reduce((sum, c) => sum + c.originalPrice, 0);
+  const totalDiscountPrice = orderItems.reduce((sum, c) => sum + c.discountPrice, 0);
+
   // Distinct course transfer memo (e.g. "HMN PHOBO 0901234567")
-  const transferMemo = PaymentService.generateCourseTransferMemo(course, phone);
-  const finalPrice = Math.max(0, course.discountPrice - couponDiscount);
+  const transferMemo = PaymentService.generateCourseTransferMemo(primaryCourse, phone);
+  const finalPrice = Math.max(0, totalDiscountPrice - couponDiscount);
 
   // Dynamic VietQR and SePay QR URLs
   const vietQrUrl = PaymentService.getVietQRImageUrl({
@@ -81,8 +88,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       const txPhone = (detail.transaction?.studentPhone || detail.student?.phone || '').replace(/[^0-9]/g, '');
       const currentPhone = phone.replace(/[^0-9]/g, '');
 
-      // Check if this transaction matches current course or phone
-      if (txCourseId === course.id || (txPhone && currentPhone && txPhone === currentPhone)) {
+      // Check if this transaction matches any course in the order or phone
+      const matchesOrderCourse = orderItems.some(item => item.id === txCourseId);
+      if (matchesOrderCourse || (txPhone && currentPhone && txPhone === currentPhone)) {
         setSepaySuccessBanner(`🎉 SePay Webhook: Đã nhận được thanh toán ${new Intl.NumberFormat('vi-VN').format(detail.transaction.transferAmount)}đ từ ${detail.transaction.gateway}!`);
         setIsProcessing(true);
         confetti({
@@ -92,14 +100,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         });
         setTimeout(() => {
           setIsProcessing(false);
-          onPaymentSuccess({ name, phone, email });
+          onPaymentSuccess({ name, phone, email }, orderItems);
         }, 1200);
       }
     };
 
     window.addEventListener('sepay_payment_received', handleSepayReceived);
     return () => window.removeEventListener('sepay_payment_received', handleSepayReceived);
-  }, [course.id, phone, name, email, onPaymentSuccess]);
+  }, [primaryCourse.id, phone, name, email, onPaymentSuccess]);
 
   // Auto simulated countdown when VietQR is selected
   useEffect(() => {
@@ -153,7 +161,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         origin: { y: 0.6 }
       });
       setIsProcessing(false);
-      onPaymentSuccess({ name, phone, email });
+      onPaymentSuccess({ name, phone, email }, orderItems);
     }, 1500);
   };
 
@@ -451,32 +459,41 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                 Tóm Tắt Đơn Hàng
               </h3>
 
-              {/* Course Item matching Image 3 */}
-              <div className="flex gap-4 pb-5 border-b border-stone-100">
-                <img
-                  src={course.thumbnail || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80'}
-                  alt={course.title}
-                  className="w-20 h-20 rounded-xl object-cover shrink-0 border border-stone-200"
-                />
-                <div className="space-y-1">
-                  <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-stone-100 text-stone-800 uppercase tracking-wider">
-                    BẾP TRƯỞNG 15 NĂM KINH NGHIỆM
-                  </span>
-                  <h4 className="font-black text-stone-900 text-sm line-clamp-2 leading-snug">
-                    {course.title}
-                  </h4>
-                </div>
+              {/* Course Item(s) */}
+              <div className="space-y-3 pb-5 border-b border-stone-100 max-h-64 overflow-y-auto">
+                {orderItems.map((item) => (
+                  <div key={item.id} className="flex gap-3.5 items-center">
+                    <img
+                      src={item.thumbnail || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80'}
+                      alt={item.title}
+                      className="w-16 h-16 rounded-xl object-cover shrink-0 border border-stone-200"
+                    />
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-stone-100 text-stone-800 uppercase tracking-wider truncate max-w-full">
+                        {item.instructorName}
+                      </span>
+                      <h4 className="font-black text-stone-900 text-xs sm:text-sm line-clamp-2 leading-snug">
+                        {item.title}
+                      </h4>
+                      {orderItems.length > 1 && (
+                        <p className="text-xs font-bold text-red-700 tabular-nums">
+                          {formatPrice(item.discountPrice)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Price Calculation */}
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between text-stone-600">
-                  <span>Giá gốc:</span>
-                  <span className="line-through">{formatPrice(course.originalPrice)}</span>
+                  <span>Giá gốc ({orderItems.length} khóa học):</span>
+                  <span className="line-through tabular-nums">{formatPrice(totalOriginalPrice)}</span>
                 </div>
                 <div className="flex justify-between text-emerald-700 font-semibold">
                   <span>Giảm giá ưu đãi:</span>
-                  <span>-{formatPrice(course.originalPrice - course.discountPrice)}</span>
+                  <span className="tabular-nums">-{formatPrice(Math.max(0, totalOriginalPrice - totalDiscountPrice))}</span>
                 </div>
                 {couponApplied && (
                   <div className="flex justify-between text-emerald-700 font-semibold">

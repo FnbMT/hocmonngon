@@ -50,7 +50,10 @@ import {
   ArrowDown,
   ChevronsUp,
   Shuffle,
-  Layout
+  Layout,
+  ChevronRight,
+  Layers,
+  FolderOpen
 } from 'lucide-react';
 import { Course, Instructor, Student, StudentDiscount, Enrollment, Chapter, Lesson, FirebaseConfigState, Review } from '../types';
 import { StorageService } from '../services/storage';
@@ -143,6 +146,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newInstPassword, setNewInstPassword] = useState('');
   const [newInstEmail, setNewInstEmail] = useState('');
   const [showNewInstPassword, setShowNewInstPassword] = useState(false);
+  const [newInstCourseGroups, setNewInstCourseGroups] = useState<string[]>(['KHÓA HỌC ONLINE MỞ QUÁN']);
+  const [newInstGroupInput, setNewInstGroupInput] = useState('');
 
   // Edit Instructor State
   const [showEditInstructorModal, setShowEditInstructorModal] = useState(false);
@@ -158,8 +163,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editInstPassword, setEditInstPassword] = useState('');
   const [editInstEmail, setEditInstEmail] = useState('');
   const [showEditInstPassword, setShowEditInstPassword] = useState(false);
+  const [editInstCourseGroups, setEditInstCourseGroups] = useState<string[]>(['KHÓA HỌC ONLINE MỞ QUÁN']);
+  const [editInstOriginalGroups, setEditInstOriginalGroups] = useState<string[]>(['KHÓA HỌC ONLINE MỞ QUÁN']);
+  const [editInstGroupInput, setEditInstGroupInput] = useState('');
 
-  // Instructor Avatar Upload / Camera / Compression State
+  // Instructor Avatar Upload / Camera / Compression State (Add & Edit)
   const [instAvatarMode, setInstAvatarMode] = useState<'upload' | 'camera' | 'url'>('upload');
   const [instCompressionStats, setInstCompressionStats] = useState<{
     originalSize: number;
@@ -170,18 +178,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const instFileInputRef = useRef<HTMLInputElement | null>(null);
   const instNativeCameraRef = useRef<HTMLInputElement | null>(null);
 
-  // Categories management state (Requirement 1)
-  const [categories, setCategories] = useState<string[]>(StorageService.getCategories());
-  const [showAddCategoryInput, setShowAddCategoryInput] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [showManageCategories, setShowManageCategories] = useState(false);
-  const [categoryToDeleteConfirm, setCategoryToDeleteConfirm] = useState<string | null>(null);
-  const [categoryFeedback, setCategoryFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [editInstAvatarMode, setEditInstAvatarMode] = useState<'upload' | 'camera' | 'url'>('upload');
+  const [editInstCompressionStats, setEditInstCompressionStats] = useState<{
+    originalSize: number;
+    compressedSize: number;
+    percentSaved: number;
+  } | null>(null);
+  const [isEditInstCompressing, setIsEditInstCompressing] = useState(false);
+  const editInstFileInputRef = useRef<HTMLInputElement | null>(null);
+  const editInstNativeCameraRef = useRef<HTMLInputElement | null>(null);
 
-  // New Course Form (Requirement 1 & 3)
+  // New Course Form
   const [newCourseTitle, setNewCourseTitle] = useState('');
   const [newCourseInstructorId, setNewCourseInstructorId] = useState(instructors[0]?.id || '');
-  const [newCourseCategory, setNewCourseCategory] = useState(categories[0] || 'Mở quán kinh doanh');
+  const [newCourseGroup, setNewCourseGroup] = useState(instructors[0]?.courseGroups?.[0] || 'KHÓA HỌC ONLINE MỞ QUÁN');
+  const [showQuickAddGroupModal, setShowQuickAddGroupModal] = useState(false);
+  const [quickAddGroupText, setQuickAddGroupText] = useState('');
+  const [showManageCourseGroupsModal, setShowManageCourseGroupsModal] = useState(false);
+  const [editingGroupOldName, setEditingGroupOldName] = useState<string | null>(null);
+  const [editingGroupNewName, setEditingGroupNewName] = useState('');
+  const [groupToDeleteInModal, setGroupToDeleteInModal] = useState<string | null>(null);
   const [newCourseOriginalPrice, setNewCourseOriginalPrice] = useState(1500000);
   const [newCourseDiscountPrice, setNewCourseDiscountPrice] = useState(790000);
   const [newCourseLevel, setNewCourseLevel] = useState('Mở quán kinh doanh');
@@ -195,7 +211,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newCourseTransferSyntax, setNewCourseTransferSyntax] = useState('');
 
   // Detailed Course Fields for Student View (Requirement 3)
-  const [newCoursePreviewVideoUrl, setNewCoursePreviewVideoUrl] = useState('https://www.youtube.com/embed/Pj13k8Lq0jQ');
+  const [newCoursePreviewVideoUrl, setNewCoursePreviewVideoUrl] = useState('');
+  const [editCoursePreviewVideoUrl, setEditCoursePreviewVideoUrl] = useState(selectedCourseForLessons?.previewVideoUrl || '');
   const [newCourseInclusions, setNewCourseInclusions] = useState<string[]>([
     'Video bài học chuẩn Full HD trọn đời',
     'File PDF công thức gram chuẩn cho 50 - 200 bát',
@@ -230,9 +247,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       description: 'Sắp xếp quầy bếp khoa học phục vụ nhanh giờ cao điểm.'
     }
   ]);
-  const [newCoursePdfUrl, setNewCoursePdfUrl] = useState('https://drive.google.com/file/d/sample-cong-thuc');
-  const [newCourseExcelUrl, setNewCourseExcelUrl] = useState('https://docs.google.com/spreadsheets/sample-tinh-cost');
-  const [newCourseZaloLink, setNewCourseZaloLink] = useState('https://zalo.me/g/hocmonngon-support');
 
   // Course Thumbnail Image Compression & Upload/Camera State (Requirement 1)
   const [thumbnailInputMode, setThumbnailInputMode] = useState<'upload' | 'camera' | 'url'>('upload');
@@ -244,7 +258,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isCompressing, setIsCompressing] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
-  const [cameraTarget, setCameraTarget] = useState<'course' | 'instructor'>('course');
+  const [cameraTarget, setCameraTarget] = useState<'course' | 'instructor' | 'edit-instructor'>('course');
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -257,7 +271,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newLessonDuration, setNewLessonDuration] = useState(20);
   const [newLessonIsFree, setNewLessonIsFree] = useState(false);
   const [newLessonVideoUrl, setNewLessonVideoUrl] = useState('https://www.youtube.com/embed/Pj13k8Lq0jQ');
-  const [newLessonDocUrl, setNewLessonDocUrl] = useState('https://drive.google.com/file/sample-cong-thuc');
+  const [newLessonDocUrl, setNewLessonDocUrl] = useState('');
+  const [newLessonDocName, setNewLessonDocName] = useState('');
+  const [newLessonExcelUrl, setNewLessonExcelUrl] = useState('');
+  const [newLessonExcelName, setNewLessonExcelName] = useState('');
   const [newLessonRecipeText, setNewLessonRecipeText] = useState('');
   const [newLessonRequirePaymentForDoc, setNewLessonRequirePaymentForDoc] = useState(false); // Toggle Link Tài liệu
 
@@ -338,30 +355,122 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [showAddChapterInTab3, setShowAddChapterInTab3] = useState(false);
   const [newChapterTitleInTab3, setNewChapterTitleInTab3] = useState('');
 
-  // Tab 3: Search and limit displayed courses (Yêu cầu: ô tìm khóa học & chỉ hiện 4 khóa mới nhất)
+  // Tab 3: Search & Hierarchical Grouping (Giảng viên -> Nhóm khóa học -> Tên khóa học)
   const [tab3CourseSearch, setTab3CourseSearch] = useState('');
-  const [showAllCoursesTab3, setShowAllCoursesTab3] = useState(false);
+  const [tab3InstructorFilter, setTab3InstructorFilter] = useState<string>('all');
+  const [collapsedTab3Instructors, setCollapsedTab3Instructors] = useState<Record<string, boolean>>({});
 
-  // Filter and limit courses in Tab 3: default shows 4 newest from scoped list
+  // Sync newCourseGroup when newCourseInstructorId changes
+  useEffect(() => {
+    const effectiveId = (isInstructor && currentInstructorId) ? currentInstructorId : newCourseInstructorId;
+    const chef = instructors.find(i => i.id === effectiveId);
+    const groups = (chef?.courseGroups && chef.courseGroups.length > 0)
+      ? chef.courseGroups
+      : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+    if (!groups.some(g => g.toLowerCase() === newCourseGroup.trim().toLowerCase())) {
+      setNewCourseGroup(groups[0]);
+    }
+  }, [newCourseInstructorId, instructors, isInstructor, currentInstructorId]);
+
   const filteredCoursesForTab3 = useMemo(() => {
     let list = scopedCourses;
+    if (!isInstructor && tab3InstructorFilter !== 'all') {
+      list = list.filter(c => c.instructorId === tab3InstructorFilter);
+    }
     if (tab3CourseSearch.trim()) {
       const q = tab3CourseSearch.trim().toLowerCase();
-      list = list.filter(c => 
-        c.title.toLowerCase().includes(q) || 
+      list = list.filter(c =>
+        c.title.toLowerCase().includes(q) ||
         c.instructorName.toLowerCase().includes(q) ||
-        c.category.toLowerCase().includes(q)
+        (c.courseGroup || '').toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) ||
+        c.chapters.some(chap =>
+          chap.title.toLowerCase().includes(q) ||
+          chap.lessons.some(les => les.title.toLowerCase().includes(q))
+        )
       );
     }
     return list;
-  }, [scopedCourses, tab3CourseSearch]);
+  }, [scopedCourses, tab3CourseSearch, tab3InstructorFilter, isInstructor]);
 
-  const displayedCoursesTab3 = useMemo(() => {
-    if (tab3CourseSearch.trim() || showAllCoursesTab3) {
-      return filteredCoursesForTab3;
+  // Organize filtered courses scientifically: Giảng viên -> Nhóm khóa học -> Tên khóa học (A-Z)
+  const organizedCoursesTab3 = useMemo(() => {
+    const sections: {
+      instructor: Instructor;
+      totalCourses: number;
+      groups: {
+        groupName: string;
+        courses: Course[];
+      }[];
+    }[] = [];
+
+    const visibleInstructors = isInstructor && currentInstructorId
+      ? instructors.filter(i => i.id === currentInstructorId)
+      : (!isInstructor && tab3InstructorFilter !== 'all'
+          ? instructors.filter(i => i.id === tab3InstructorFilter)
+          : instructors);
+
+    const matchedCourseIds = new Set<string>();
+
+    for (const chef of visibleInstructors) {
+      const chefCourses = filteredCoursesForTab3.filter(c => c.instructorId === chef.id);
+      if (chefCourses.length === 0) continue;
+
+      chefCourses.forEach(c => matchedCourseIds.add(c.id));
+      const definedGroups = (chef.courseGroups && chef.courseGroups.length > 0)
+        ? chef.courseGroups
+        : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+
+      const groups: { groupName: string; courses: Course[] }[] = [];
+      definedGroups.forEach((groupName, gIdx) => {
+        const normalized = groupName.trim().toLowerCase();
+        const groupCourses = chefCourses
+          .filter(c => {
+            const cGroup = (c.courseGroup || '').trim().toLowerCase();
+            if (!cGroup) return gIdx === 0;
+            if (cGroup === normalized) return true;
+            if (gIdx === 0 && !definedGroups.some(dg => dg.trim().toLowerCase() === cGroup)) return true;
+            return false;
+          })
+          .sort((a, b) => a.title.localeCompare(b.title, 'vi', { sensitivity: 'base' }));
+
+        if (groupCourses.length > 0) {
+          groups.push({ groupName, courses: groupCourses });
+        }
+      });
+
+      sections.push({
+        instructor: chef,
+        totalCourses: chefCourses.length,
+        groups
+      });
     }
-    return filteredCoursesForTab3.slice(0, 4);
-  }, [filteredCoursesForTab3, tab3CourseSearch, showAllCoursesTab3]);
+
+    // Fallback for any orphan courses whose instructor was removed
+    const orphanCourses = filteredCoursesForTab3
+      .filter(c => !matchedCourseIds.has(c.id))
+      .sort((a, b) => a.title.localeCompare(b.title, 'vi', { sensitivity: 'base' }));
+    if (orphanCourses.length > 0) {
+      sections.push({
+        instructor: {
+          id: 'other-instructors',
+          name: 'Giảng viên khác',
+          title: 'Khóa học hệ thống',
+          avatar: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80',
+          specialty: '',
+          bio: '',
+          courseCount: orphanCourses.length,
+          studentCount: 0,
+          rating: 5.0,
+          courseGroups: ['KHÓA HỌC ONLINE MỞ QUÁN']
+        },
+        totalCourses: orphanCourses.length,
+        groups: [{ groupName: 'KHÓA HỌC ONLINE MỞ QUÁN', courses: orphanCourses }]
+      });
+    }
+
+    return sections;
+  }, [filteredCoursesForTab3, instructors, isInstructor, currentInstructorId, tab3InstructorFilter]);
 
   // Firebase Config Form
   const [fbConfig, setFbConfig] = useState<FirebaseConfigState>(StorageService.getFirebaseConfig());
@@ -370,6 +479,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [fbPasteSnippet, setFbPasteSnippet] = useState('');
   const [showPasteBox, setShowPasteBox] = useState(false);
   const [copiedEnv, setCopiedEnv] = useState(false);
+
+  useEffect(() => {
+    const syncFbState = () => {
+      const latest = StorageService.getFirebaseConfig();
+      setFbConfig(prev => (JSON.stringify(prev) === JSON.stringify(latest) ? prev : latest));
+    };
+    window.addEventListener('firebase_config_updated', syncFbState);
+    return () => window.removeEventListener('firebase_config_updated', syncFbState);
+  }, []);
 
   const generateVercelEnvSnippet = () => {
     const apiKey = fbConfig.apiKey || import.meta.env.VITE_FIREBASE_API_KEY || '';
@@ -409,7 +527,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   }, [scopedCourses]);
 
-  // Keep newLessonChapterId synced with valid chapter of currently selected course
+  // Keep newLessonChapterId & editCoursePreviewVideoUrl synced with currently selected course
   useEffect(() => {
     if (selectedCourseForLessons && selectedCourseForLessons.chapters.length > 0) {
       if (!selectedCourseForLessons.chapters.some(c => c.id === newLessonChapterId)) {
@@ -418,6 +536,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } else {
       setNewLessonChapterId('');
     }
+    setEditCoursePreviewVideoUrl(selectedCourseForLessons?.previewVideoUrl || '');
   }, [selectedCourseForLessons]);
 
   // Delete Confirmation States
@@ -698,70 +817,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  // ==========================================
-  // REQUIREMENT 1: Category Management Handlers
-  // ==========================================
-  const handleAddNewCategory = () => {
-    const clean = newCategoryName.trim();
-    if (!clean) return;
-    const updated = StorageService.addCategory(clean);
-    setCategories(updated);
-    setNewCourseCategory(clean);
-    setNewCategoryName('');
-    setShowAddCategoryInput(false);
-    setCategoryFeedback({
-      type: 'success',
-      message: `Đã thêm nhóm mới "${clean}" thành công!`
-    });
-    setTimeout(() => setCategoryFeedback(null), 3000);
-    onRefreshData();
-  };
-
-  const handleRequestDeleteCategory = (catToDelete: string) => {
-    if (categories.length <= 1) {
-      setCategoryFeedback({
-        type: 'error',
-        message: 'Hệ thống cần duy trì ít nhất 1 nhóm phân loại!'
-      });
-      setTimeout(() => setCategoryFeedback(null), 3000);
-      return;
-    }
-    setCategoryToDeleteConfirm(catToDelete);
-  };
-
-  const handleConfirmDeleteCategory = (catToDelete: string) => {
-    if (categories.length <= 1) {
-      setCategoryFeedback({
-        type: 'error',
-        message: 'Hệ thống cần duy trì ít nhất 1 nhóm phân loại!'
-      });
-      setTimeout(() => setCategoryFeedback(null), 3000);
-      setCategoryToDeleteConfirm(null);
-      return;
-    }
-
-    const updated = StorageService.deleteCategory(catToDelete);
-    setCategories(updated);
-    if (newCourseCategory === catToDelete) {
-      setNewCourseCategory(updated[0] || 'Mở quán kinh doanh');
-    }
-    setCategoryToDeleteConfirm(null);
-    setCategoryFeedback({
-      type: 'success',
-      message: `Đã xóa nhóm "${catToDelete}" thành công!`
-    });
-    setTimeout(() => setCategoryFeedback(null), 3500);
-    setActionAlert({
-      type: 'success',
-      message: `Đã xóa nhóm phân loại "${catToDelete}" khỏi hệ thống thành công!`
-    });
-    onRefreshData();
-  };
-
-  const handleDeleteCategory = (catToDelete: string) => {
-    handleConfirmDeleteCategory(catToDelete);
-  };
-
   // ========================================================
   // REQUIREMENT 1: Image Compression & Upload/Camera Handlers
   // ========================================================
@@ -818,7 +873,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const startCamera = async (facing: 'environment' | 'user' = cameraFacing, target: 'course' | 'instructor' = 'course') => {
+  // Edit Instructor Avatar Compression & File Handler
+  const processEditInstructorImageFile = async (file: File | Blob | string) => {
+    setIsEditInstCompressing(true);
+    try {
+      const res = await compressImage(file, 500, 500, 0.8);
+      setEditInstAvatar(res.dataUrl);
+      const percent = Math.round((1 - res.compressedSize / (res.originalSize || 1)) * 100);
+      setEditInstCompressionStats({
+        originalSize: res.originalSize,
+        compressedSize: res.compressedSize,
+        percentSaved: percent > 0 ? percent : 0
+      });
+    } catch (err) {
+      console.error('Error compressing edit instructor avatar:', err);
+      alert('Không thể xử lý hoặc nén ảnh đại diện. Vui lòng thử lại!');
+    } finally {
+      setIsEditInstCompressing(false);
+    }
+  };
+
+  const handleEditInstFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processEditInstructorImageFile(file);
+    }
+  };
+
+  const startCamera = async (
+    facing: 'environment' | 'user' = cameraFacing,
+    target: 'course' | 'instructor' | 'edit-instructor' = 'course'
+  ) => {
     setCameraTarget(target);
     setShowCameraModal(true);
     try {
@@ -840,6 +925,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       console.warn('Direct webcam access not available, triggering native device camera:', err);
       if (target === 'instructor') {
         instNativeCameraRef.current?.click();
+      } else if (target === 'edit-instructor') {
+        editInstNativeCameraRef.current?.click();
       } else {
         nativeCameraInputRef.current?.click();
       }
@@ -874,6 +961,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     stopCamera();
     if (cameraTarget === 'instructor') {
       await processInstructorImageFile(dataUrl);
+    } else if (cameraTarget === 'edit-instructor') {
+      await processEditInstructorImageFile(dataUrl);
     } else {
       await processImageFile(dataUrl);
     }
@@ -992,6 +1081,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       requirePaymentForDoc: false,
       videoUrl: 'https://www.youtube.com/embed/Pj13k8Lq0jQ',
       recipeDocumentUrl: '',
+      recipeDocumentName: '',
+      excelCostSheetUrl: '',
+      excelCostSheetName: '',
       recipeText: generateLessonRecipeTemplate(title),
       order: editingChapter.lessons.length + 1
     };
@@ -1000,6 +1092,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       lessons: [...editingChapter.lessons, newLesson]
     });
     setEditingChapterNewLessonTitle('');
+  };
+
+  const handleLessonFileUpload = (
+    file: File,
+    onLoaded: (dataUrl: string, fileName: string) => void
+  ) => {
+    const maxBytes = 800 * 1024;
+    if (file.size > maxBytes) {
+      setActionAlert({
+        type: 'error',
+        message: `File "${file.name}" (${Math.round(file.size / 1024)} KB) vượt quá giới hạn tải trực tiếp 800 KB. Vui lòng tải file lên Google Drive/Firebase rồi dán link chia sẻ vào ô bên cạnh!`
+      });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        onLoaded(reader.result, file.name);
+        setActionAlert({
+          type: 'success',
+          message: `Đã đính kèm tài liệu "${file.name}" vào bài học!`
+        });
+      }
+    };
+    reader.onerror = () => {
+      setActionAlert({
+        type: 'error',
+        message: 'Không thể đọc tệp đã chọn. Vui lòng thử lại!'
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveEditChapter = (e: React.FormEvent) => {
@@ -1018,6 +1141,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       requirePaymentForDoc: Boolean(l.requirePaymentForDoc),
       videoUrl: toYouTubeEmbedUrl(l.videoUrl) || l.videoUrl || 'https://www.youtube.com/embed/Pj13k8Lq0jQ',
       recipeDocumentUrl: l.recipeDocumentUrl ? l.recipeDocumentUrl.trim() : '',
+      recipeDocumentName: l.recipeDocumentUrl?.trim() ? (l.recipeDocumentName || '') : '',
+      excelCostSheetUrl: l.excelCostSheetUrl ? l.excelCostSheetUrl.trim() : '',
+      excelCostSheetName: l.excelCostSheetUrl?.trim() ? (l.excelCostSheetName || '') : '',
       recipeText: l.recipeText ? l.recipeText.trim() : generateLessonRecipeTemplate(l.title),
       order: idx + 1
     }));
@@ -1107,6 +1233,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const assignedUsername = newInstUsername.trim().toLowerCase() || `chef${Math.floor(100 + Math.random() * 900)}`;
     const assignedPassword = newInstPassword.trim() || '123456';
     const assignedEmail = newInstEmail.trim() || `${assignedUsername}@hocmonngon.vn`;
+    const cleanGroups = newInstCourseGroups
+      .map(g => g.trim())
+      .filter((g, idx, arr) => g.length > 0 && arr.indexOf(g) === idx);
+    const finalGroups = cleanGroups.length > 0 ? cleanGroups : ['KHÓA HỌC ONLINE MỞ QUÁN'];
 
     const newInst: Instructor = {
       id: 'chef-' + Date.now(),
@@ -1122,7 +1252,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       zalo: newInstZalo.trim(),
       username: assignedUsername,
       password: assignedPassword,
-      email: assignedEmail
+      email: assignedEmail,
+      courseGroups: finalGroups
     };
 
     StorageService.addInstructor(newInst);
@@ -1139,9 +1270,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setNewInstUsername('');
     setNewInstPassword('');
     setNewInstEmail('');
+    setNewInstCourseGroups(['KHÓA HỌC ONLINE MỞ QUÁN']);
+    setNewInstGroupInput('');
+    setInstCompressionStats(null);
 
-    // Requirement 2: Automatically select new chef and open course creation modal!
+    // Automatically select new chef & their first group and open course creation modal
     setNewCourseInstructorId(newInst.id);
+    setNewCourseGroup(finalGroups[0]);
     setActionAlert({
       type: 'success',
       message: `Đã thêm Giảng viên "${newInst.name}" thành công với User: "${assignedUsername}" (MK: "${assignedPassword}"). Giảng viên có thể đăng nhập bằng tài khoản này để quản lý khóa học của mình!`
@@ -1151,6 +1286,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Handler: Open Edit Chef Modal
   const handleOpenEditChef = (chef: Instructor) => {
+    const groups = (chef.courseGroups && chef.courseGroups.length > 0)
+      ? [...chef.courseGroups]
+      : ['KHÓA HỌC ONLINE MỞ QUÁN'];
     setEditingChef(chef);
     setEditInstName(chef.name);
     setEditInstTitle(chef.title || '');
@@ -1162,6 +1300,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditInstUsername(chef.username || '');
     setEditInstPassword(chef.password || '');
     setEditInstEmail(chef.email || '');
+    setEditInstCourseGroups(groups);
+    setEditInstOriginalGroups([...groups]);
+    setEditInstGroupInput('');
+    setEditInstAvatarMode('upload');
+    setEditInstCompressionStats(null);
     setShowEditInstructorModal(true);
   };
 
@@ -1169,6 +1312,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleUpdateInstructor = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingChef || !editInstName.trim()) return;
+
+    const cleanGroups = editInstCourseGroups
+      .map(g => g.trim())
+      .filter((g, idx, arr) => g.length > 0 && arr.indexOf(g) === idx);
+    const finalGroups = cleanGroups.length > 0 ? cleanGroups : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+
+    // Track renamed groups at matching positions to migrate courses cleanly
+    const groupRenames: Record<string, string> = {};
+    editInstOriginalGroups.forEach((oldName, idx) => {
+      const nextName = finalGroups[idx];
+      if (oldName && nextName && oldName !== nextName) {
+        groupRenames[oldName] = nextName;
+      }
+    });
 
     const updated: Instructor = {
       ...editingChef,
@@ -1181,15 +1338,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       zalo: editInstZalo.trim(),
       username: editInstUsername.trim().toLowerCase() || editingChef.username,
       password: editInstPassword.trim() || editingChef.password,
-      email: editInstEmail.trim() || editingChef.email
+      email: editInstEmail.trim() || editingChef.email,
+      courseGroups: finalGroups
     };
 
-    StorageService.updateInstructor(updated);
+    StorageService.updateInstructor(updated, groupRenames);
     setShowEditInstructorModal(false);
     onRefreshData();
     setActionAlert({
       type: 'success',
-      message: `Đã cập nhật thông tin và tài khoản đăng nhập của Bếp trưởng "${updated.name}" thành công!`
+      message: `Đã cập nhật thông tin, ảnh đại diện và ${finalGroups.length} nhóm khóa học của Bếp trưởng "${updated.name}" thành công!`
     });
   };
 
@@ -1202,6 +1360,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const chef = instructors.find(i => i.id === effectiveInstructorId) || currentInstructorProfile || instructors[0];
     const defaultThumb = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80';
     const defaultChefAvatar = 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80';
+    const chefGroups = (chef?.courseGroups && chef.courseGroups.length > 0)
+      ? chef.courseGroups
+      : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+    const selectedCourseGroup = newCourseGroup.trim() || chefGroups[0];
+
+    const extractedIntroYtId = extractYouTubeId(newCoursePreviewVideoUrl);
+    const resolvedPreviewVideoUrl = extractedIntroYtId
+      ? `https://www.youtube.com/embed/${extractedIntroYtId}`
+      : '';
 
     const newCourse: Course = {
       id: 'course-' + Date.now(),
@@ -1210,11 +1377,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       instructorId: chef?.id || 'chef-default',
       instructorName: chef?.name || 'Bếp trưởng',
       instructorAvatar: (chef?.avatar && chef.avatar.trim()) ? chef.avatar : defaultChefAvatar,
-      category: newCourseCategory,
+      category: selectedCourseGroup,
+      courseGroup: selectedCourseGroup,
       shortDescription: newCourseDesc.trim() || 'Khóa học thực chiến cùng Bếp trưởng giàu kinh nghiệm.',
       description: newCourseDesc.trim(),
       thumbnail: (newCourseThumbnail && newCourseThumbnail.trim()) ? newCourseThumbnail : defaultThumb,
-      previewVideoUrl: '',
+      previewVideoUrl: resolvedPreviewVideoUrl,
       originalPrice: Number(newCourseOriginalPrice),
       discountPrice: Number(newCourseDiscountPrice),
       level: newCourseLevel,
@@ -1240,9 +1408,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         'File công thức PDF chuẩn gram',
         'Hỗ trợ 1-1 cùng giảng viên'
       ],
-      pdfRecipeUrl: newCoursePdfUrl.trim(),
+      pdfRecipeUrl: undefined,
       excelCostSheetUrl: undefined,
-      zaloGroupLink: newCourseZaloLink.trim(),
+      zaloGroupLink: undefined,
       badge: newCourseBadge,
       badgeColor: newCourseBadgeColor,
       reviews: newCourseReviews,
@@ -1251,11 +1419,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     StorageService.addCourse(newCourse);
     setSelectedCourseForLessons(newCourse);
+    setNewCoursePreviewVideoUrl('');
     setShowAddCourseModal(false);
     onRefreshData();
     setActionAlert({
       type: 'success',
-      message: `Đã xuất bản thành công khóa học "${newCourse.title}" cho Bếp trưởng ${chef.name} và đồng bộ lên Firebase! Bạn có thể thêm các chương và bài học cho khóa học này bất kỳ lúc nào.`
+      message: `Đã xuất bản thành công khóa học "${newCourse.title}" vào nhóm "${selectedCourseGroup}" của Bếp trưởng ${chef.name} và đồng bộ lên Firebase!`
     });
   };
 
@@ -1275,6 +1444,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       message: badge === 'none' 
         ? `Đã tắt hiển thị huy hiệu cho khóa "${updated.title}" trên Trang Chủ!`
         : `Đã đổi huy hiệu khóa "${updated.title}" thành "${badge}" thành công và đồng bộ lên Trang Chủ!`
+    });
+  };
+
+  // Handler: Update Course Intro Video (YouTube) or Clear to Show Image Only
+  const handleUpdateCoursePreviewVideo = (rawUrl: string) => {
+    if (!selectedCourseForLessons) return;
+    const trimmed = rawUrl.trim();
+    if (!trimmed) {
+      const updated: Course = {
+        ...selectedCourseForLessons,
+        previewVideoUrl: ''
+      };
+      StorageService.updateCourse(updated);
+      setSelectedCourseForLessons(updated);
+      setEditCoursePreviewVideoUrl('');
+      onRefreshData();
+      setActionAlert({
+        type: 'success',
+        message: `Đã xóa video giới thiệu của khóa "${updated.title}". Trang chi tiết sẽ chỉ hiển thị ảnh khóa học!`
+      });
+      return;
+    }
+
+    const ytId = extractYouTubeId(trimmed);
+    if (!ytId) {
+      setActionAlert({
+        type: 'error',
+        message: 'Link YouTube giới thiệu chưa đúng định dạng (hỗ trợ youtube.com/watch?v=..., youtu.be/..., shorts/..., embed/...).'
+      });
+      return;
+    }
+
+    const embedUrl = `https://www.youtube.com/embed/${ytId}`;
+    const updated: Course = {
+      ...selectedCourseForLessons,
+      previewVideoUrl: embedUrl
+    };
+    StorageService.updateCourse(updated);
+    setSelectedCourseForLessons(updated);
+    setEditCoursePreviewVideoUrl(embedUrl);
+    onRefreshData();
+    setActionAlert({
+      type: 'success',
+      message: `Đã cập nhật video giới thiệu cho khóa "${updated.title}" thành công!`
     });
   };
 
@@ -1343,6 +1556,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       requirePaymentForDoc: Boolean(newLessonRequirePaymentForDoc),
       videoUrl: toYouTubeEmbedUrl(newLessonVideoUrl) || 'https://www.youtube.com/embed/Pj13k8Lq0jQ',
       recipeDocumentUrl: newLessonDocUrl.trim(),
+      recipeDocumentName: newLessonDocUrl.trim() ? newLessonDocName.trim() : '',
+      excelCostSheetUrl: newLessonExcelUrl.trim(),
+      excelCostSheetName: newLessonExcelUrl.trim() ? newLessonExcelName.trim() : '',
       recipeText: finalRecipeText,
       order: (parentChap?.lessons.length || 0) + 1
     };
@@ -1353,6 +1569,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setNewLessonChapterId(targetChapId);
     setShowAddLessonModal(false);
     setNewLessonTitle('');
+    setNewLessonDocUrl('');
+    setNewLessonDocName('');
+    setNewLessonExcelUrl('');
+    setNewLessonExcelName('');
     onRefreshData();
     setActionAlert({
       type: 'success',
@@ -1493,22 +1713,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         StorageService.setStudentsFromRemote(remote.students);
       }
       if (remote.enrollments && remote.enrollments.length > 0) {
-        const currentEnrollments = StorageService.getEnrollments();
-        const currentIds = new Set(currentEnrollments.map(e => e.id));
-        const newEnrollments = remote.enrollments.filter(e => !currentIds.has(e.id));
-        if (newEnrollments.length > 0) {
-          const merged = [...currentEnrollments, ...newEnrollments];
-          localStorage.setItem('hocmonngon_enrollments_v1', JSON.stringify(merged));
-        }
+        StorageService.setEnrollmentsFromRemote(remote.enrollments);
       }
       if (remote.homepageConfig) {
-        StorageService.saveHomepageConfig(remote.homepageConfig);
+        StorageService.setHomepageConfigFromRemote(remote.homepageConfig);
       }
       if (remote.bankConfig) {
-        PaymentService.saveBankConfig(remote.bankConfig);
+        PaymentService.setBankConfigFromRemote(remote.bankConfig);
       }
       if (remote.sepayConfig) {
-        PaymentService.saveSePayConfig(remote.sepayConfig);
+        PaymentService.setSePayConfigFromRemote(remote.sepayConfig);
       }
       onRefreshData();
       setFbStatusMessage(`Đã tải về và cập nhật: ${instCount} Giảng viên, ${courseCount} Khóa học, cùng cài đặt Trang chủ & Thanh toán từ Firestore!`);
@@ -1628,7 +1842,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <p className="text-[11px] text-stone-500">
               {isInstructor 
                 ? `${scopedCourses.reduce((sum, c) => sum + c.chapters.reduce((ls, ch) => ls + ch.lessons.length, 0), 0)} bài giảng video`
-                : `${categories.length} nhóm phân loại`}
+                : `${instructors.reduce((sum, i) => sum + (i.courseGroups?.length || 1), 0)} nhóm khóa học`}
             </p>
           </div>
         </div>
@@ -2086,6 +2300,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
 
+                <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-[#0e4a38]" />
+                      <span>Nhóm Khóa Học Hiển Thị Trên Trang Chủ</span>
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (currentInstructorProfile) {
+                          handleOpenEditChef(currentInstructorProfile);
+                        }
+                      }}
+                      className="text-[11px] font-bold text-red-700 hover:underline cursor-pointer"
+                    >
+                      Quản lý nhóm →
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {(currentInstructorProfile?.courseGroups && currentInstructorProfile.courseGroups.length > 0
+                      ? currentInstructorProfile.courseGroups
+                      : ['KHÓA HỌC ONLINE MỞ QUÁN']
+                    ).map((grp, gIdx) => (
+                      <span
+                        key={gIdx}
+                        className="px-3 py-1 bg-white border border-stone-200 rounded-lg text-xs font-bold text-[#0e4a38]"
+                      >
+                        {grp}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200 space-y-1.5">
                   <h4 className="text-xs font-black text-stone-900">Tiểu sử & Kinh nghiệm thực chiến</h4>
                   <p className="text-xs text-stone-600 leading-relaxed">
@@ -2100,7 +2347,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div>
                   <h2 className="text-lg font-black text-stone-900">Danh Sách Bếp Trưởng & Giảng Viên</h2>
                   <p className="text-xs text-stone-500">
-                    Sắp xếp thứ tự giảng viên hiển thị trên Trang Chủ (Giảng viên ở vị trí #1 sẽ xuất hiện đầu tiên) • Thêm mới & cấp user/mật khẩu đăng nhập
+                    Sắp xếp thứ tự giảng viên hiển thị trên Trang Chủ • Quản lý ảnh đại diện & các nhóm khóa học riêng của từng giảng viên
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2115,7 +2362,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {instructors.map((chef, index) => (
+              {instructors.map((chef, index) => {
+                const chefGroups = (chef.courseGroups && chef.courseGroups.length > 0)
+                  ? chef.courseGroups
+                  : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+                const chefCourseCount = courses.filter(c => c.instructorId === chef.id).length;
+
+                return (
                 <div key={chef.id} className="bg-white rounded-2xl border border-stone-200 p-6 shadow-xs flex flex-col justify-between space-y-4 hover:shadow-md transition-shadow relative">
                   {/* Thứ tự hiển thị & Nút di chuyển vị trí */}
                   <div className={`flex items-center justify-between pb-3 border-b ${index === 0 ? 'border-red-100 bg-red-50/50 -mx-6 -mt-6 p-4 rounded-t-2xl' : 'border-stone-100'}`}>
@@ -2178,21 +2431,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <img
                         src={chef.avatar || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80'}
                         alt={chef.name}
-                        className="w-16 h-16 rounded-2xl object-cover ring-2 ring-red-100 shadow-xs"
+                        className="w-16 h-16 rounded-2xl object-cover ring-2 ring-red-100 shadow-xs shrink-0"
                       />
-                      <div>
-                        <h3 className="font-black text-base text-stone-900">{chef.name}</h3>
-                        <p className="text-[11px] text-red-700 font-semibold">{chef.title}</p>
+                      <div className="min-w-0">
+                        <h3 className="font-black text-base text-stone-900 truncate">{chef.name}</h3>
+                        <p className="text-[11px] text-red-700 font-semibold truncate">{chef.title}</p>
                         <p className="text-[10px] text-stone-400 font-mono">Zalo/SĐT: {chef.phone || '0988409798'}</p>
                       </div>
                     </div>
 
-                    <p className="text-xs text-stone-600 line-clamp-3 leading-relaxed">
+                    <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed">
                       {chef.bio}
                     </p>
 
+                    {/* Nhóm khóa học của giảng viên */}
+                    <div className="p-2.5 bg-stone-50 rounded-xl border border-stone-200/80 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                          <Layers className="w-3 h-3 text-[#0e4a38]" />
+                          Nhóm khóa học ({chefGroups.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditChef(chef)}
+                          className="text-[10px] font-bold text-red-700 hover:underline cursor-pointer"
+                        >
+                          Sửa nhóm
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {chefGroups.map((g, gIdx) => (
+                          <span
+                            key={gIdx}
+                            className="px-2 py-0.5 bg-white border border-stone-200 rounded text-[10px] font-bold text-[#0e4a38] truncate max-w-full"
+                          >
+                            {g}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-3 text-xs text-stone-500 font-semibold pt-1 border-t border-stone-100">
-                      <span>📖 {chef.courseCount} khóa</span>
+                      <span>📖 {chefCourseCount} khóa</span>
                       <span>👥 {chef.studentCount.toLocaleString()}+ học viên</span>
                       <span className="text-amber-600">★ {chef.rating}</span>
                     </div>
@@ -2256,7 +2536,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           )
@@ -2285,43 +2566,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Course Selector to manage its lessons */}
-            <div className="bg-white p-5 rounded-2xl border border-stone-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Hierarchical Course Selector: Giảng viên -> Nhóm khóa học -> Tên khóa học + Tìm nhanh */}
+            <div className="bg-white p-5 rounded-2xl border border-stone-200 space-y-4 shadow-2xs">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-stone-100">
                 <div>
                   <label className="text-xs font-black text-stone-800 uppercase tracking-wider flex items-center gap-2">
-                    <span>Chọn Khóa Học Để Quản Lý Bài Học</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200">
-                      {scopedCourses.length} khóa
+                    <FolderOpen className="w-4 h-4 text-red-700" />
+                    <span>Chọn Khóa Học Theo Giảng Viên → Nhóm → Tên Khóa Học</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200 tabular-nums">
+                      {filteredCoursesForTab3.length}/{scopedCourses.length} khóa
                     </span>
                   </label>
                   <p className="text-[11px] text-stone-500 mt-0.5">
-                    {isInstructor
-                      ? 'Chỉ hiển thị các khóa học do bạn trực tiếp giảng dạy. Chọn một khóa để thêm hoặc quản lý bài học.'
-                      : 'Mặc định hiển thị 4 khóa học mới nhất. Tìm kiếm nhanh theo tên khóa hoặc giảng viên.'}
+                    Sắp xếp khoa học theo từng Giảng viên → Nhóm khóa học → Tên khóa học (A-Z) để tìm và quản lý bài học nhanh chóng.
                   </p>
                 </div>
 
-                {/* Ô tìm kiếm khóa học (Yêu cầu 2) */}
-                <div className="relative w-full sm:w-80">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                  <input
-                    type="text"
-                    placeholder="Tìm khóa học hoặc tên giảng viên..."
-                    value={tab3CourseSearch}
-                    onChange={(e) => setTab3CourseSearch(e.target.value)}
-                    className="w-full pl-9 pr-8 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-red-600 focus:bg-white focus:ring-1 focus:ring-red-600 transition-all placeholder:text-stone-400"
-                  />
-                  {tab3CourseSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setTab3CourseSearch('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 cursor-pointer"
-                      title="Xóa tìm kiếm"
+                {/* Tìm kiếm nhanh khóa học & Lọc giảng viên */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  {!isInstructor && instructors.length > 1 && (
+                    <select
+                      value={tab3InstructorFilter}
+                      onChange={(e) => setTab3InstructorFilter(e.target.value)}
+                      className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-700 focus:outline-none focus:border-red-600 cursor-pointer"
                     >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                      <option value="all">Tất cả giảng viên ({instructors.length})</option>
+                      {instructors.map(chef => (
+                        <option key={chef.id} value={chef.id}>
+                          GV: {chef.name}
+                        </option>
+                      ))}
+                    </select>
                   )}
+
+                  <div className="relative w-full sm:w-80">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-red-600" />
+                    <input
+                      type="text"
+                      placeholder="Tìm nhanh khóa học, bài học, nhóm hoặc GV..."
+                      value={tab3CourseSearch}
+                      onChange={(e) => setTab3CourseSearch(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-red-600 focus:bg-white focus:ring-2 focus:ring-red-600/15 transition-all placeholder:text-stone-400"
+                    />
+                    {tab3CourseSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setTab3CourseSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 cursor-pointer"
+                        title="Xóa tìm kiếm"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2351,101 +2648,151 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span>Tạo Khóa Học Mới Ngay</span>
                   </button>
                 </div>
-              ) : displayedCoursesTab3.length === 0 ? (
+              ) : organizedCoursesTab3.length === 0 ? (
                 <div className="text-center py-8 px-4 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
                   <p className="text-xs text-stone-600 font-medium">
-                    Không tìm thấy khóa học nào phù hợp với từ khóa <span className="font-bold text-stone-900">&quot;{tab3CourseSearch}&quot;</span>
+                    Không tìm thấy khóa học hoặc bài học nào phù hợp với bộ lọc hiện tại
+                    {tab3CourseSearch.trim() && (
+                      <> (<span className="font-bold text-stone-900">&quot;{tab3CourseSearch}&quot;</span>)</>
+                    )}
                   </p>
                   <button
                     type="button"
-                    onClick={() => setTab3CourseSearch('')}
+                    onClick={() => {
+                      setTab3CourseSearch('');
+                      setTab3InstructorFilter('all');
+                    }}
                     className="text-xs font-bold text-red-700 hover:underline cursor-pointer"
                   >
                     Xóa bộ lọc tìm kiếm
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {/* Danh sách 4 khóa học mới nhất với giảng viên hiển thị rõ ràng (Yêu cầu 1, 3) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {displayedCoursesTab3.map(course => {
-                      const totalLessons = course.chapters.reduce((acc, c) => acc + c.lessons.length, 0);
-                      const isSelected = selectedCourseForLessons?.id === course.id;
+                <div className="space-y-4 max-h-[540px] overflow-y-auto pr-1">
+                  {organizedCoursesTab3.map((section) => {
+                    const chefId = section.instructor.id;
+                    const isSearching = Boolean(tab3CourseSearch.trim() || tab3InstructorFilter !== 'all');
+                    const isCollapsed = !isSearching && Boolean(collapsedTab3Instructors[chefId]);
+                    const totalChefLessons = section.groups.reduce(
+                      (sum, g) => sum + g.courses.reduce((s2, c) => s2 + c.chapters.reduce((s3, ch) => s3 + ch.lessons.length, 0), 0),
+                      0
+                    );
 
-                      return (
-                        <button
-                          key={course.id}
-                          type="button"
-                          onClick={() => setSelectedCourseForLessons(course)}
-                          className={`text-left p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between relative group ${
-                            isSelected
-                              ? 'bg-red-50/90 border-red-500 ring-2 ring-red-500/20 shadow-xs'
-                              : 'bg-stone-50 hover:bg-stone-100 border-stone-200 hover:border-stone-300'
-                          }`}
-                        >
-                          <div className="flex items-start gap-2.5">
+                    return (
+                      <div key={chefId} className="rounded-2xl border border-stone-200 overflow-hidden bg-stone-50/40">
+                        {/* Level 1: Giảng Viên Header */}
+                        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-stone-100/90 border-b border-stone-200">
+                          <button
+                            type="button"
+                            onClick={() => setCollapsedTab3Instructors(prev => ({ ...prev, [chefId]: !prev[chefId] }))}
+                            className="flex items-center gap-3 text-left flex-1 min-w-0 cursor-pointer"
+                          >
+                            <ChevronDown className={`w-4 h-4 text-stone-600 shrink-0 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                             <img
-                              src={course.thumbnail || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80'}
-                              alt={course.title}
-                              className="w-12 h-12 rounded-lg object-cover ring-1 ring-stone-200 shrink-0"
+                              src={section.instructor.avatar || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=100&q=80'}
+                              alt={section.instructor.name}
+                              className="w-8 h-8 rounded-lg object-cover ring-1 ring-stone-300 shrink-0"
                             />
                             <div className="min-w-0 flex-1">
-                              {/* Hiển thị Giảng viên trên mỗi khóa học */}
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <img
-                                  src={course.instructorAvatar || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=100&q=80'}
-                                  alt={course.instructorName}
-                                  className="w-4 h-4 rounded-full object-cover ring-1 ring-stone-200 shrink-0"
-                                />
-                                <span className="text-[10px] font-bold text-amber-900 bg-amber-100/90 px-1.5 py-0.5 rounded truncate max-w-[130px]" title={course.instructorName}>
-                                  GV: {course.instructorName}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-black text-stone-900 text-xs sm:text-sm uppercase tracking-tight">
+                                  Giảng viên: {section.instructor.name}
+                                </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-700 tabular-nums">
+                                  {section.groups.length} nhóm • {section.totalCourses} khóa • {totalChefLessons} bài học
                                 </span>
                               </div>
-                              <h4 className="text-xs font-black text-stone-900 line-clamp-2 leading-tight">
-                                {course.title.split(' - ')[0]}
-                              </h4>
                             </div>
-                          </div>
+                          </button>
 
-                          <div className="mt-2.5 pt-2 border-t border-stone-200/70 flex items-center justify-between text-[11px]">
-                            <span className="text-stone-500 font-semibold text-[10px]">
-                              {totalLessons} bài học
-                            </span>
-                            {isSelected ? (
-                              <span className="font-bold text-red-700 flex items-center gap-1 text-[10px]">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                Đang chọn
-                              </span>
-                            ) : (
-                              <span className="text-stone-400 group-hover:text-stone-700 text-[10px] font-bold">
-                                Chọn quản lý →
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewCourseInstructorId(section.instructor.id);
+                              setShowAddCourseModal(true);
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-red-50 text-red-700 border border-stone-200 hover:border-red-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer shrink-0 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span className="hidden sm:inline">Thêm khóa cho GV</span>
+                          </button>
+                        </div>
 
-                  {/* Nút Xem tất cả / Thu gọn khi có hơn 4 khóa học (Yêu cầu 3) */}
-                  {!tab3CourseSearch.trim() && filteredCoursesForTab3.length > 4 && (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-stone-100">
-                      <p className="text-xs text-stone-500">
-                        {showAllCoursesTab3
-                          ? `Đang hiển thị toàn bộ ${filteredCoursesForTab3.length} khóa học`
-                          : `Đang hiển thị 4 khóa học mới nhất (còn ${filteredCoursesForTab3.length - 4} khóa khác)`
-                        }
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setShowAllCoursesTab3(!showAllCoursesTab3)}
-                        className="self-start sm:self-auto px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                      >
-                        <span>{showAllCoursesTab3 ? 'Thu gọn (chỉ hiện 4 khóa mới nhất)' : `Xem tất cả ${filteredCoursesForTab3.length} khóa học`}</span>
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAllCoursesTab3 ? 'rotate-180' : ''}`} />
-                      </button>
-                    </div>
-                  )}
+                        {/* Level 2: Nhóm Khóa Học -> Level 3: Khóa Học Sắp Xếp A-Z */}
+                        {!isCollapsed && (
+                          <div className="p-3 sm:p-4 space-y-4">
+                            {section.groups.map((grp) => (
+                              <div key={`${chefId}__${grp.groupName}`} className="space-y-2.5">
+                                <div className="flex items-center justify-between gap-2 px-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-4 rounded-full bg-[#0e4a38]" />
+                                    <h4 className="text-xs font-black text-[#0e4a38] uppercase tracking-wide">
+                                      Nhóm: {grp.groupName}
+                                    </h4>
+                                    <span className="text-[10px] font-bold text-stone-500 tabular-nums">
+                                      ({grp.courses.length} khóa)
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                  {grp.courses.map((course) => {
+                                    const totalLessons = course.chapters.reduce((acc, c) => acc + c.lessons.length, 0);
+                                    const isSelected = selectedCourseForLessons?.id === course.id;
+
+                                    return (
+                                      <button
+                                        key={course.id}
+                                        type="button"
+                                        onClick={() => setSelectedCourseForLessons(course)}
+                                        className={`text-left p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between relative group ${
+                                          isSelected
+                                            ? 'bg-red-50/90 border-red-500 ring-2 ring-red-500/20 shadow-xs'
+                                            : 'bg-white hover:bg-stone-50 border-stone-200 hover:border-stone-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-start gap-2.5">
+                                          <img
+                                            src={course.thumbnail || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80'}
+                                            alt={course.title}
+                                            className="w-11 h-11 rounded-lg object-cover ring-1 ring-stone-200 shrink-0"
+                                          />
+                                          <div className="min-w-0 flex-1">
+                                            <h5 className="text-xs font-black text-stone-900 line-clamp-2 leading-tight">
+                                              {course.title.split(' - ')[0]}
+                                            </h5>
+                                            <p className="text-[10px] text-stone-500 font-semibold mt-1 tabular-nums">
+                                              {course.chapters.length} chương • {totalLessons} bài học
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        <div className="mt-2 pt-1.5 border-t border-stone-100 flex items-center justify-between text-[10px]">
+                                          <span className="font-bold text-red-700 tabular-nums">
+                                            {formatPrice(course.discountPrice)}
+                                          </span>
+                                          {isSelected ? (
+                                            <span className="font-bold text-red-700 flex items-center gap-1">
+                                              <CheckCircle2 className="w-3 h-3" />
+                                              Đang chọn
+                                            </span>
+                                          ) : (
+                                            <span className="text-stone-400 group-hover:text-stone-700 font-bold">
+                                              Quản lý bài →
+                                            </span>
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2495,9 +2842,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     />
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">
-                          Nhóm: {selectedCourseForLessons.category}
-                        </span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 flex items-center gap-1">
                           <img
                             src={selectedCourseForLessons.instructorAvatar || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=100&q=80'}
@@ -2506,6 +2850,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           />
                           GV: {selectedCourseForLessons.instructorName}
                         </span>
+                        {/* Chuyển nhóm khóa học trực tiếp */}
+                        {(() => {
+                          const ownerChef = instructors.find(i => i.id === selectedCourseForLessons.instructorId);
+                          const ownerGroups = (ownerChef?.courseGroups && ownerChef.courseGroups.length > 0)
+                            ? ownerChef.courseGroups
+                            : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+                          const currentGrp = ownerGroups.find(
+                            g => g.toLowerCase() === (selectedCourseForLessons.courseGroup || '').trim().toLowerCase()
+                          ) || ownerGroups[0];
+                          return (
+                            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#0e4a38] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                              <span>Nhóm trang chủ:</span>
+                              <select
+                                value={currentGrp}
+                                onChange={(e) => {
+                                  const nextGroup = e.target.value;
+                                  const updated = { ...selectedCourseForLessons, courseGroup: nextGroup };
+                                  StorageService.updateCourse(updated);
+                                  setSelectedCourseForLessons(updated);
+                                  onRefreshData();
+                                  setActionAlert({
+                                    type: 'success',
+                                    message: `Đã chuyển khóa "${updated.title.split(' - ')[0]}" sang nhóm "${nextGroup}"!`
+                                  });
+                                }}
+                                className="bg-transparent font-black text-[#0e4a38] focus:outline-none cursor-pointer"
+                              >
+                                {ownerGroups.map((g, i) => (
+                                  <option key={i} value={g}>{g}</option>
+                                ))}
+                              </select>
+                            </label>
+                          );
+                        })()}
                         <span className="text-xs text-stone-500">
                           • Học phí: <span className="font-bold text-stone-800">{formatPrice(selectedCourseForLessons.discountPrice)}</span>
                         </span>
@@ -2514,7 +2892,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         {selectedCourseForLessons.title}
                       </h3>
 
-                      {/* 2 NÚT THAO TÁC ĐIỀU CHỈNH KHÓA HỌC: HIỂN THỊ NGAY GẦN TÊN KHÓA HỌC (YÊU CẦU 4) */}
+                      {/* 2 NÚT THAO TÁC ĐIỀU CHỈNH KHÓA HỌC */}
                       <div className="flex items-center gap-2 pt-1 flex-wrap">
                         <button
                           type="button"
@@ -2704,6 +3082,67 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     >
                       Lưu huy hiệu
                     </button>
+                  </div>
+                </div>
+
+                {/* Video Giới Thiệu Khóa Học (YouTube) */}
+                <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-black text-stone-900 text-xs sm:text-sm flex items-center gap-1.5">
+                        <Video className="w-4 h-4 text-red-700" />
+                        <span>Video giới thiệu khóa học (YouTube)</span>
+                      </h4>
+                      <p className="text-[11px] text-stone-500">
+                        Nếu để trống, trang chi tiết khóa học sẽ chỉ hiển thị ảnh đại diện của khóa học (không hiện video mặc định).
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 ${
+                      extractYouTubeId(selectedCourseForLessons.previewVideoUrl)
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-stone-200 text-stone-700'
+                    }`}>
+                      {extractYouTubeId(selectedCourseForLessons.previewVideoUrl)
+                        ? 'Đang có video giới thiệu'
+                        : 'Chỉ hiển thị ảnh khóa học'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <input
+                      type="text"
+                      value={editCoursePreviewVideoUrl}
+                      onChange={(e) => setEditCoursePreviewVideoUrl(e.target.value)}
+                      placeholder="Dán link YouTube (https://youtu.be/... hoặc https://www.youtube.com/watch?v=...). Để trống = chỉ hiện ảnh"
+                      className="flex-1 px-3 py-1.5 bg-white border border-stone-300 rounded-lg text-xs font-mono focus:outline-none focus:border-red-600"
+                    />
+                    {extractYouTubeId(editCoursePreviewVideoUrl) && (
+                      <button
+                        type="button"
+                        onClick={() => setVideoTestUrl(editCoursePreviewVideoUrl)}
+                        className="px-3 py-1.5 bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                      >
+                        <Play className="w-3.5 h-3.5 text-red-600" />
+                        <span>Xem thử</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateCoursePreviewVideo(editCoursePreviewVideoUrl)}
+                      className="px-4 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-2xs shrink-0"
+                    >
+                      Lưu video
+                    </button>
+                    {(selectedCourseForLessons.previewVideoUrl || editCoursePreviewVideoUrl.trim()) && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateCoursePreviewVideo('')}
+                        className="px-3 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-lg text-xs font-bold cursor-pointer transition-colors shrink-0"
+                        title="Xóa video để chỉ hiển thị ảnh khóa học"
+                      >
+                        Xóa video (Chỉ hiện ảnh)
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -2911,11 +3350,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       )}
                                     </div>
 
-                                    <p className="text-[11px] text-stone-500 flex items-center gap-3">
+                                    <p className="text-[11px] text-stone-500 flex items-center gap-3 flex-wrap">
                                       <span>⏱ {lesson.durationMinutes} phút</span>
                                       <span>📹 Video YouTube Embed</span>
-                                      {lesson.recipeDocumentUrl && (
-                                        <span>📄 Tài liệu: {lesson.recipeDocumentUrl.slice(0, 30)}...</span>
+                                      {lesson.recipeDocumentUrl && lesson.recipeDocumentUrl.trim() !== 'https://drive.google.com/file/sample-cong-thuc' && (
+                                        <span>📄 PDF: {lesson.recipeDocumentName || `${lesson.recipeDocumentUrl.slice(0, 28)}...`}</span>
+                                      )}
+                                      {lesson.excelCostSheetUrl && (
+                                        <span>📊 Excel: {lesson.excelCostSheetName || `${lesson.excelCostSheetUrl.slice(0, 28)}...`}</span>
                                       )}
                                     </p>
                                   </div>
@@ -3536,6 +3978,81 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="w-full p-2.5 bg-stone-50 border rounded-xl"
                 />
               </div>
+              {/* Nhóm Khóa Học Của Giảng Viên */}
+              <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-black text-[#0e4a38] flex items-center gap-1.5 text-xs">
+                    <Layers className="w-4 h-4" />
+                    <span>Nhóm Khóa Học Hiển Thị Trên Trang Chủ</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-[#0e4a38] bg-white px-2 py-0.5 rounded border border-emerald-200">
+                    {newInstCourseGroups.length} nhóm
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {newInstCourseGroups.map((grp, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={grp}
+                        onChange={(e) => {
+                          const updated = [...newInstCourseGroups];
+                          updated[idx] = e.target.value;
+                          setNewInstCourseGroups(updated);
+                        }}
+                        placeholder="Ví dụ: KHÓA HỌC ONLINE MỞ QUÁN"
+                        className="flex-1 px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-[#0e4a38]"
+                      />
+                      {newInstCourseGroups.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setNewInstCourseGroups(newInstCourseGroups.filter((_, i) => i !== idx))}
+                          className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                          title="Xóa nhóm này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={newInstGroupInput}
+                    onChange={(e) => setNewInstGroupInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = newInstGroupInput.trim();
+                        if (val && !newInstCourseGroups.some(g => g.toLowerCase() === val.toLowerCase())) {
+                          setNewInstCourseGroups([...newInstCourseGroups, val]);
+                          setNewInstGroupInput('');
+                        }
+                      }
+                    }}
+                    placeholder="Nhập tên nhóm mới (vd: KHÓA HỌC ONLINE CƠ BẢN)..."
+                    className="flex-1 px-2.5 py-1.5 bg-white border border-stone-200 rounded-lg text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = newInstGroupInput.trim();
+                      if (val && !newInstCourseGroups.some(g => g.toLowerCase() === val.toLowerCase())) {
+                        setNewInstCourseGroups([...newInstCourseGroups, val]);
+                        setNewInstGroupInput('');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-[#0e4a38] hover:bg-[#093628] text-white font-bold rounded-lg text-xs cursor-pointer flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-stone-700 mb-1">Số điện thoại</label>
@@ -3689,23 +4206,145 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block font-bold text-stone-700 mb-1">URL Ảnh đại diện</label>
+              {/* Ảnh đại diện Giảng viên: Tải từ máy tính / điện thoại, Chụp camera, hoặc Link URL */}
+              <div className="space-y-2 p-3 bg-stone-50 rounded-2xl border border-stone-200">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <label className="font-bold text-stone-800 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-red-700" />
+                    <span>Ảnh đại diện Giảng viên</span>
+                  </label>
+                  <div className="flex rounded-lg p-0.5 bg-stone-200 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setEditInstAvatarMode('upload')}
+                      className={`px-2 py-0.5 rounded-md cursor-pointer ${
+                        editInstAvatarMode === 'upload' ? 'bg-white shadow text-stone-900' : 'text-stone-600'
+                      }`}
+                    >
+                      Tải từ máy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditInstAvatarMode('camera')}
+                      className={`px-2 py-0.5 rounded-md cursor-pointer ${
+                        editInstAvatarMode === 'camera' ? 'bg-white shadow text-stone-900' : 'text-stone-600'
+                      }`}
+                    >
+                      Chụp ảnh
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditInstAvatarMode('url')}
+                      className={`px-2 py-0.5 rounded-md cursor-pointer ${
+                        editInstAvatarMode === 'url' ? 'bg-white shadow text-stone-900' : 'text-stone-600'
+                      }`}
+                    >
+                      Link URL
+                    </button>
+                  </div>
+                </div>
+
+                {/* Hidden File Inputs for Edit Instructor */}
                 <input
-                  type="text"
-                  value={editInstAvatar}
-                  onChange={(e) => setEditInstAvatar(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full p-2.5 bg-stone-50 border rounded-xl font-mono text-[11px]"
+                  type="file"
+                  ref={editInstFileInputRef}
+                  accept="image/*"
+                  onChange={handleEditInstFileInputChange}
+                  className="hidden"
                 />
-                {editInstAvatar && (
-                  <div className="mt-2 flex items-center gap-3 p-2 bg-stone-50 rounded-xl border border-stone-200">
+                <input
+                  type="file"
+                  ref={editInstNativeCameraRef}
+                  accept="image/*"
+                  capture="user"
+                  onChange={handleEditInstFileInputChange}
+                  className="hidden"
+                />
+
+                {/* Mode: Upload from device */}
+                {editInstAvatarMode === 'upload' && (
+                  <div
+                    onClick={() => editInstFileInputRef.current?.click()}
+                    className="border-2 border-dashed border-stone-300 hover:border-red-600 rounded-xl p-3.5 text-center cursor-pointer bg-white transition-all hover:bg-red-50/20 space-y-1"
+                  >
+                    <Upload className="w-6 h-6 text-stone-400 mx-auto" />
+                    <p className="font-bold text-stone-800 text-xs">
+                      Bấm để chọn ảnh từ máy tính hoặc điện thoại
+                    </p>
+                    <p className="text-[10px] text-stone-500">
+                      Hỗ trợ JPG, PNG, WEBP. Tự động nén vuông 500x500 tối ưu dung lượng lưu trữ.
+                    </p>
+                  </div>
+                )}
+
+                {/* Mode: Camera capture */}
+                {editInstAvatarMode === 'camera' && (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startCamera('user', 'edit-instructor')}
+                        className="py-2.5 px-3 bg-red-700 hover:bg-red-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs text-xs"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>Mở Camera chụp ngay</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => editInstNativeCameraRef.current?.click()}
+                        className="py-2.5 px-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs text-xs"
+                      >
+                        <SwitchCamera className="w-4 h-4" />
+                        <span>Máy ảnh thiết bị</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-stone-500 text-center">
+                      Chụp ảnh trực tiếp từ camera thiết bị và tự động nén vuông sắc nét.
+                    </p>
+                  </div>
+                )}
+
+                {/* Mode: Direct URL */}
+                {editInstAvatarMode === 'url' && (
+                  <input
+                    type="text"
+                    value={editInstAvatar}
+                    onChange={(e) => {
+                      setEditInstAvatar(e.target.value);
+                      setEditInstCompressionStats(null);
+                    }}
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full p-2.5 bg-white border border-stone-200 rounded-xl font-mono text-[11px]"
+                  />
+                )}
+
+                {isEditInstCompressing && (
+                  <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-semibold flex items-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                    <span>Đang nén ảnh chân dung...</span>
+                  </div>
+                )}
+
+                {Boolean(editInstAvatar && editInstAvatar.trim()) && (
+                  <div className="flex items-center gap-3 p-2 bg-white rounded-xl border border-stone-200">
                     <img
                       src={editInstAvatar}
-                      alt="Preview"
-                      className="w-12 h-12 rounded-xl object-cover ring-1 ring-stone-300"
+                      alt="Ảnh đại diện xem trước"
+                      className="w-12 h-12 rounded-xl object-cover ring-2 ring-red-100 shrink-0"
                     />
-                    <span className="text-[11px] text-stone-500 font-medium">Ảnh đại diện xem trước</span>
+                    <div className="flex-1 min-w-0 space-y-0.5">
+                      <p className="font-bold text-stone-900 text-xs">Ảnh đại diện xem trước</p>
+                      {editInstCompressionStats ? (
+                        <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 shrink-0" />
+                          <span>
+                            Đã nén tối ưu: {formatFileSize(editInstCompressionStats.compressedSize)} (Giảm {editInstCompressionStats.percentSaved}% dung lượng)
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-stone-500">Đang hiển thị ảnh hiện tại của giảng viên</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -3719,6 +4358,102 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   placeholder="Kinh nghiệm thực chiến, nhà hàng đã tư vấn..."
                   className="w-full p-2.5 bg-stone-50 border rounded-xl"
                 />
+              </div>
+
+              {/* Quản lý các Nhóm Khóa Học của Giảng viên */}
+              <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-black text-[#0e4a38] text-xs flex items-center gap-1.5">
+                      <Layers className="w-4 h-4" />
+                      <span>Nhóm Khóa Học Hiển Thị Trên Trang Chủ</span>
+                    </h4>
+                    <p className="text-[10px] text-stone-600 mt-0.5">
+                      Đặt tên & thêm các nhóm khóa học riêng cho giảng viên này (mặc định: KHÓA HỌC ONLINE MỞ QUÁN)
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#0e4a38] bg-white px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                    {editInstCourseGroups.length} nhóm
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {editInstCourseGroups.map((grp, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={grp}
+                        onChange={(e) => {
+                          const updated = [...editInstCourseGroups];
+                          updated[idx] = e.target.value;
+                          setEditInstCourseGroups(updated);
+                        }}
+                        placeholder="Ví dụ: KHÓA HỌC ONLINE MỞ QUÁN"
+                        className="flex-1 px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-[#0e4a38]"
+                      />
+                      {idx > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = [...editInstCourseGroups];
+                            const tmp = updated[idx - 1];
+                            updated[idx - 1] = updated[idx];
+                            updated[idx] = tmp;
+                            setEditInstCourseGroups(updated);
+                          }}
+                          className="p-1.5 bg-white border border-stone-200 hover:bg-stone-100 text-stone-600 rounded-lg cursor-pointer"
+                          title="Đưa nhóm lên trên"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {editInstCourseGroups.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setEditInstCourseGroups(editInstCourseGroups.filter((_, i) => i !== idx))}
+                          className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                          title="Xóa nhóm này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={editInstGroupInput}
+                    onChange={(e) => setEditInstGroupInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = editInstGroupInput.trim();
+                        if (val && !editInstCourseGroups.some(g => g.toLowerCase() === val.toLowerCase())) {
+                          setEditInstCourseGroups([...editInstCourseGroups, val]);
+                          setEditInstGroupInput('');
+                        }
+                      }
+                    }}
+                    placeholder="Thêm nhóm mới (vd: KHÓA HỌC ONLINE CƠ BẢN)..."
+                    className="flex-1 px-2.5 py-1.5 bg-white border border-stone-200 rounded-lg text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = editInstGroupInput.trim();
+                      if (val && !editInstCourseGroups.some(g => g.toLowerCase() === val.toLowerCase())) {
+                        setEditInstCourseGroups([...editInstCourseGroups, val]);
+                        setEditInstGroupInput('');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-[#0e4a38] hover:bg-[#093628] text-white font-bold rounded-lg text-xs cursor-pointer flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -4014,18 +4749,104 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             />
                           </div>
 
-                          <div>
-                            <label className="block font-bold text-stone-700 mb-1 flex items-center gap-1">
-                              <FileText className="w-3 h-3 text-amber-600" />
-                              <span>Link File Tài liệu công thức (PDF / Drive)</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={lesson.recipeDocumentUrl || ''}
-                              onChange={(e) => handleUpdateLessonInEditingChapter(lesson.id, { recipeDocumentUrl: e.target.value })}
-                              placeholder="https://drive.google.com/file/..."
-                              className="w-full p-2 bg-white border border-stone-300 rounded-lg text-xs font-mono text-[11px]"
-                            />
+                          <div className="space-y-2">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="font-bold text-stone-700 flex items-center gap-1">
+                                  <FileText className="w-3 h-3 text-amber-600" />
+                                  <span>Tài liệu PDF / Drive (Tùy chọn)</span>
+                                </label>
+                                <label className="text-[10px] font-bold text-red-700 hover:text-red-800 cursor-pointer flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                                  <Upload className="w-3 h-3" />
+                                  <span>Tải PDF lên</span>
+                                  <input
+                                    type="file"
+                                    accept=".pdf,.doc,.docx,application/pdf"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) {
+                                        handleLessonFileUpload(f, (dataUrl, name) => {
+                                          handleUpdateLessonInEditingChapter(lesson.id, {
+                                            recipeDocumentUrl: dataUrl,
+                                            recipeDocumentName: name
+                                          });
+                                        });
+                                      }
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={lesson.recipeDocumentUrl?.startsWith('data:') ? (lesson.recipeDocumentName || 'Đã tải file lên') : (lesson.recipeDocumentUrl || '')}
+                                  readOnly={Boolean(lesson.recipeDocumentUrl?.startsWith('data:'))}
+                                  onChange={(e) => handleUpdateLessonInEditingChapter(lesson.id, { recipeDocumentUrl: e.target.value, recipeDocumentName: '' })}
+                                  placeholder="Để trống nếu không có, hoặc dán link / tải file lên"
+                                  className="flex-1 p-2 bg-white border border-stone-300 rounded-lg text-xs font-mono text-[11px]"
+                                />
+                                {lesson.recipeDocumentUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateLessonInEditingChapter(lesson.id, { recipeDocumentUrl: '', recipeDocumentName: '' })}
+                                    className="px-2 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                                  >
+                                    Xóa
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="font-bold text-stone-700 flex items-center gap-1">
+                                  <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
+                                  <span>File Excel / Google Sheets (Tùy chọn)</span>
+                                </label>
+                                <label className="text-[10px] font-bold text-emerald-800 hover:text-emerald-900 cursor-pointer flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <Upload className="w-3 h-3" />
+                                  <span>Tải Excel lên</span>
+                                  <input
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) {
+                                        handleLessonFileUpload(f, (dataUrl, name) => {
+                                          handleUpdateLessonInEditingChapter(lesson.id, {
+                                            excelCostSheetUrl: dataUrl,
+                                            excelCostSheetName: name
+                                          });
+                                        });
+                                      }
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={lesson.excelCostSheetUrl?.startsWith('data:') ? (lesson.excelCostSheetName || 'Đã tải file Excel') : (lesson.excelCostSheetUrl || '')}
+                                  readOnly={Boolean(lesson.excelCostSheetUrl?.startsWith('data:'))}
+                                  onChange={(e) => handleUpdateLessonInEditingChapter(lesson.id, { excelCostSheetUrl: e.target.value, excelCostSheetName: '' })}
+                                  placeholder="Để trống nếu không có, hoặc dán link / tải file lên"
+                                  className="flex-1 p-2 bg-white border border-stone-300 rounded-lg text-xs font-mono text-[11px]"
+                                />
+                                {lesson.excelCostSheetUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateLessonInEditingChapter(lesson.id, { excelCostSheetUrl: '', excelCostSheetName: '' })}
+                                    className="px-2 py-1.5 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                                  >
+                                    Xóa
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -4171,185 +4992,290 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 />
               </div>
 
-              {/* Giảng viên & Nhóm phân loại (Requirement 1: Category with + and trash) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-stone-700 mb-1">Giảng viên phụ trách</label>
-                  {isInstructor ? (
-                    <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-xl font-bold text-amber-950 flex items-center justify-between">
-                      <span>{currentInstructorProfile?.name || currentUser?.name}</span>
-                      <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
-                        Khóa học của bạn
-                      </span>
-                    </div>
-                  ) : (
-                    <select
-                      value={newCourseInstructorId}
-                      onChange={(e) => setNewCourseInstructorId(e.target.value)}
-                      className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-medium"
-                    >
-                      {instructors.map(chef => (
-                        <option key={chef.id} value={chef.id}>{chef.name}</option>
-                      ))}
-                    </select>
-                  )}
+              {/* Giảng viên phụ trách & Nhóm khóa học trên Trang Chủ */}
+              {(() => {
+                const effectiveId = (isInstructor && currentInstructorId) ? currentInstructorId : newCourseInstructorId;
+                const selectedChef = instructors.find(i => i.id === effectiveId) || instructors[0];
+                const chefGroups = (selectedChef?.courseGroups && selectedChef.courseGroups.length > 0)
+                  ? selectedChef.courseGroups
+                  : ['KHÓA HỌC ONLINE MỞ QUÁN'];
 
-                  {/* Selected Instructor Preview */}
-                  {(() => {
-                    const selectedChef = instructors.find(i => i.id === newCourseInstructorId) || instructors[0];
-                    if (!selectedChef) return null;
-                    return (
-                      <div className="mt-2 p-2 bg-stone-100/90 rounded-xl border border-stone-200 flex items-center gap-2.5">
-                        <img
-                          src={selectedChef.avatar || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80'}
-                          alt={selectedChef.name}
-                          className="w-9 h-9 rounded-full object-cover ring-2 ring-red-100 shrink-0"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-bold text-stone-900 text-xs truncate">{selectedChef.name}</p>
-                          <p className="text-[10px] text-red-700 font-semibold truncate">{selectedChef.title}</p>
-                          <p className="text-[10px] text-stone-500 truncate">{selectedChef.specialty ? `Chuyên môn: ${selectedChef.specialty}` : selectedChef.bio}</p>
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                    {/* Cột Trái: Giảng viên phụ trách */}
+                    <div>
+                      <label className="block font-bold text-stone-700 mb-1">Giảng viên phụ trách</label>
+                      {isInstructor ? (
+                        <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-xl font-bold text-amber-950 flex items-center justify-between">
+                          <span>{currentInstructorProfile?.name || currentUser?.name}</span>
+                          <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                            Khóa học của bạn
+                          </span>
+                        </div>
+                      ) : (
+                        <select
+                          value={newCourseInstructorId}
+                          onChange={(e) => {
+                            setNewCourseInstructorId(e.target.value);
+                            setEditingGroupOldName(null);
+                            setGroupToDeleteInModal(null);
+                          }}
+                          className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-medium"
+                        >
+                          {instructors.map(chef => (
+                            <option key={chef.id} value={chef.id}>{chef.name}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {selectedChef && (
+                        <div className="mt-2 p-2.5 bg-stone-100/90 rounded-xl border border-stone-200 flex items-center gap-2.5">
+                          <img
+                            src={selectedChef.avatar || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80'}
+                            alt={selectedChef.name}
+                            className="w-9 h-9 rounded-full object-cover ring-2 ring-red-100 shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-stone-900 text-xs truncate">{selectedChef.name}</p>
+                            <p className="text-[10px] text-red-700 font-semibold truncate">{selectedChef.title}</p>
+                            <p className="text-[10px] text-stone-500 truncate">{selectedChef.specialty ? `Chuyên môn: ${selectedChef.specialty}` : selectedChef.bio}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Cột Phải: Nhóm khóa học trên Trang Chủ (Thêm / Sửa / Xóa đầy đủ) */}
+                    <div className="p-3 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="font-bold text-[#0e4a38] text-xs flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 shrink-0" />
+                          <span>Nhóm khóa học trên Trang Chủ</span>
+                        </label>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowQuickAddGroupModal(!showQuickAddGroupModal);
+                              setShowManageCourseGroupsModal(false);
+                            }}
+                            className="px-2 py-0.5 bg-[#0e4a38] hover:bg-[#093628] text-white text-[10px] font-bold rounded flex items-center gap-0.5 cursor-pointer transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Thêm</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowManageCourseGroupsModal(!showManageCourseGroupsModal);
+                              setShowQuickAddGroupModal(false);
+                              setEditingGroupOldName(null);
+                              setGroupToDeleteInModal(null);
+                            }}
+                            className="px-2 py-0.5 bg-white hover:bg-stone-100 text-stone-700 border border-emerald-300 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                            title="Sửa hoặc xóa các nhóm khóa học đã tạo"
+                          >
+                            Sửa/Xóa ({chefGroups.length})
+                          </button>
                         </div>
                       </div>
-                    );
-                  })()}
-                </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-stone-700">Nhóm / Phân loại</label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddCategoryInput(!showAddCategoryInput)}
-                        className="px-1.5 py-0.5 bg-red-100 hover:bg-red-200 text-red-800 text-[10px] font-black rounded flex items-center gap-0.5 cursor-pointer"
-                        title="Thêm nhóm mới"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Thêm nhóm</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowManageCategories(!showManageCategories)}
-                        className="px-1.5 py-0.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] font-bold rounded cursor-pointer"
-                        title="Quản lý & xóa nhóm cũ"
-                      >
-                        Quản lý ({categories.length})
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Inline Add Category Form */}
-                  {showAddCategoryInput && (
-                    <div className="mb-2 p-2.5 bg-red-50/70 rounded-xl border border-red-200 space-y-2">
-                      <p className="text-[10px] font-black text-red-800 uppercase">Tạo nhóm phân loại mới:</p>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="text"
-                          placeholder="Ví dụ: Món Lẩu Nướng, Bánh Âu..."
-                          value={newCategoryName}
-                          onChange={(e) => setNewCategoryName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleAddNewCategory();
-                            }
-                          }}
-                          className="flex-1 px-2.5 py-1.5 bg-white border border-stone-300 rounded-lg text-xs focus:outline-none focus:border-red-600"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddNewCategory}
-                          className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white font-bold rounded-lg cursor-pointer text-xs transition-colors"
-                        >
-                          Lưu
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Manage / Delete Existing Categories list */}
-                  {showManageCategories && (
-                    <div className="mb-2 p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2 max-h-48 overflow-y-auto">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-black text-stone-600 uppercase tracking-wider">
-                          Danh sách nhóm ({categories.length}):
-                        </p>
-                        <span className="text-[10px] text-stone-400">Bấm icon thùng rác để xóa</span>
-                      </div>
-
-                      {/* In-box Feedback Message */}
-                      {categoryFeedback && (
-                        <div className={`p-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 ${
-                          categoryFeedback.type === 'success'
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                            : 'bg-red-50 text-red-800 border border-red-200'
-                        }`}>
-                          {categoryFeedback.type === 'success' ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          ) : (
-                            <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                          )}
-                          <span>{categoryFeedback.message}</span>
+                      {/* Form Thêm nhóm nhanh */}
+                      {showQuickAddGroupModal && selectedChef && (
+                        <div className="p-2 bg-white rounded-xl border border-emerald-200 space-y-1.5">
+                          <p className="text-[10px] font-bold text-[#0e4a38]">Tạo nhóm mới cho {selectedChef.name}:</p>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              placeholder="Ví dụ: KHÓA HỌC ONLINE CƠ BẢN"
+                              value={quickAddGroupText}
+                              onChange={(e) => setQuickAddGroupText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const clean = quickAddGroupText.trim();
+                                  if (!clean) return;
+                                  StorageService.addInstructorCourseGroup(selectedChef.id, clean);
+                                  setNewCourseGroup(clean);
+                                  setQuickAddGroupText('');
+                                  setShowQuickAddGroupModal(false);
+                                  onRefreshData();
+                                }
+                              }}
+                              className="flex-1 px-2.5 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-[11px]"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const clean = quickAddGroupText.trim();
+                                if (!clean) return;
+                                StorageService.addInstructorCourseGroup(selectedChef.id, clean);
+                                setNewCourseGroup(clean);
+                                setQuickAddGroupText('');
+                                setShowQuickAddGroupModal(false);
+                                onRefreshData();
+                              }}
+                              className="px-2.5 py-1.5 bg-[#0e4a38] hover:bg-[#093628] text-white font-bold rounded-lg text-[11px] cursor-pointer"
+                            >
+                              Lưu
+                            </button>
+                          </div>
                         </div>
                       )}
 
-                      <div className="flex flex-wrap gap-1.5">
-                        {categories.map(cat => {
-                          const isConfirming = categoryToDeleteConfirm === cat;
-                          return isConfirming ? (
-                            <div
-                              key={cat}
-                              className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-50 border border-red-300 rounded-lg text-[11px] shadow-xs"
+                      {/* Danh sách Quản lý: Sửa tên / Xóa các nhóm đã tạo */}
+                      {showManageCourseGroupsModal && selectedChef && (
+                        <div className="p-2.5 bg-white rounded-xl border border-emerald-200 space-y-2 max-h-48 overflow-y-auto">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-stone-600 uppercase">
+                              Nhóm của {selectedChef.name} ({chefGroups.length}):
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowManageCourseGroupsModal(false)}
+                              className="text-[10px] font-bold text-stone-400 hover:text-stone-700 cursor-pointer"
                             >
-                              <span className="font-bold text-red-800">Xóa "{cat}"?</span>
-                              <button
-                                type="button"
-                                onClick={() => handleConfirmDeleteCategory(cat)}
-                                className="px-2 py-0.5 bg-red-700 hover:bg-red-800 text-white rounded font-bold text-[10px] cursor-pointer transition-colors shadow-2xs"
-                              >
-                                Xóa ngay
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setCategoryToDeleteConfirm(null)}
-                                className="px-1.5 py-0.5 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded font-semibold text-[10px] cursor-pointer transition-colors"
-                              >
-                                Hủy
-                              </button>
-                            </div>
-                          ) : (
-                            <div
-                              key={cat}
-                              className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-stone-200 hover:border-stone-300 rounded-lg text-[11px] font-semibold text-stone-800 shadow-2xs transition-colors"
-                            >
-                              <span>{cat}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleRequestDeleteCategory(cat)}
-                                className="text-stone-400 hover:text-red-700 hover:bg-red-50 p-1 rounded cursor-pointer transition-colors"
-                                title={`Xóa nhóm "${cat}"`}
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                              Đóng
+                            </button>
+                          </div>
 
-                  <select
-                    value={newCourseCategory}
-                    onChange={(e) => setNewCourseCategory(e.target.value)}
-                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-medium"
-                  >
-                    {categories.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                          <div className="space-y-1.5">
+                            {chefGroups.map((grp) => {
+                              const isEditing = editingGroupOldName === grp;
+                              const isConfirmingDelete = groupToDeleteInModal === grp;
+
+                              if (isEditing) {
+                                return (
+                                  <div key={grp} className="flex items-center gap-1.5 p-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <input
+                                      type="text"
+                                      value={editingGroupNewName}
+                                      onChange={(e) => setEditingGroupNewName(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          const clean = editingGroupNewName.trim();
+                                          if (!clean) return;
+                                          StorageService.renameInstructorCourseGroup(selectedChef.id, grp, clean);
+                                          if (newCourseGroup === grp) setNewCourseGroup(clean);
+                                          setEditingGroupOldName(null);
+                                          onRefreshData();
+                                        }
+                                      }}
+                                      className="flex-1 px-2 py-1 bg-white border border-amber-300 rounded text-[11px] font-bold text-stone-900"
+                                      autoFocus
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const clean = editingGroupNewName.trim();
+                                        if (!clean) return;
+                                        StorageService.renameInstructorCourseGroup(selectedChef.id, grp, clean);
+                                        if (newCourseGroup === grp) setNewCourseGroup(clean);
+                                        setEditingGroupOldName(null);
+                                        onRefreshData();
+                                      }}
+                                      className="px-2 py-1 bg-[#0e4a38] text-white rounded text-[10px] font-bold cursor-pointer"
+                                    >
+                                      Lưu
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingGroupOldName(null)}
+                                      className="px-1.5 py-1 bg-stone-200 text-stone-700 rounded text-[10px] font-semibold cursor-pointer"
+                                    >
+                                      Hủy
+                                    </button>
+                                  </div>
+                                );
+                              }
+
+                              if (isConfirmingDelete) {
+                                return (
+                                  <div key={grp} className="flex items-center justify-between gap-2 p-1.5 bg-red-50 border border-red-200 rounded-lg">
+                                    <span className="text-[10px] font-bold text-red-800 truncate">
+                                      Xóa &quot;{grp}&quot;?
+                                    </span>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const updated = StorageService.deleteInstructorCourseGroup(selectedChef.id, grp);
+                                          if (newCourseGroup === grp && updated?.courseGroups?.[0]) {
+                                            setNewCourseGroup(updated.courseGroups[0]);
+                                          }
+                                          setGroupToDeleteInModal(null);
+                                          onRefreshData();
+                                        }}
+                                        className="px-2 py-0.5 bg-red-700 hover:bg-red-800 text-white rounded text-[10px] font-bold cursor-pointer"
+                                      >
+                                        Xóa ngay
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setGroupToDeleteInModal(null)}
+                                        className="px-1.5 py-0.5 bg-stone-200 text-stone-700 rounded text-[10px] font-semibold cursor-pointer"
+                                      >
+                                        Hủy
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div key={grp} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-stone-50 border border-stone-200 rounded-lg">
+                                  <span className="text-[11px] font-bold text-[#0e4a38] truncate">{grp}</span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingGroupOldName(grp);
+                                        setEditingGroupNewName(grp);
+                                        setGroupToDeleteInModal(null);
+                                      }}
+                                      className="p-1 text-stone-500 hover:text-amber-700 hover:bg-amber-50 rounded cursor-pointer"
+                                      title="Sửa tên nhóm"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                    {chefGroups.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setGroupToDeleteInModal(grp);
+                                          setEditingGroupOldName(null);
+                                        }}
+                                        className="p-1 text-stone-400 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer"
+                                        title="Xóa nhóm này"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <select
+                        value={newCourseGroup}
+                        onChange={(e) => setNewCourseGroup(e.target.value)}
+                        className="w-full p-2.5 bg-white border border-emerald-300 rounded-xl font-bold text-[#0e4a38] text-xs"
+                      >
+                        {chefGroups.map((g, i) => (
+                          <option key={i} value={g}>{g}</option>
+                        ))}
+                      </select>
+
+                      <p className="text-[10px] text-stone-600 leading-snug">
+                        Khóa học sẽ hiển thị đúng dưới tiêu đề nhóm này trong mục của Giảng viên trên Trang Chủ.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Giá bán & Giá gốc */}
               <div className="grid grid-cols-2 gap-3">
@@ -4634,6 +5560,66 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 )}
               </div>
 
+              {/* Video giới thiệu khóa học (YouTube - Tùy chọn) */}
+              <div className="space-y-2 p-3 bg-stone-50 rounded-2xl border border-stone-200">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="font-bold text-stone-800 flex items-center gap-1.5">
+                    <Video className="w-4 h-4 text-red-700" />
+                    <span>Video giới thiệu khóa học (YouTube - Tùy chọn)</span>
+                  </label>
+                  {extractYouTubeId(newCoursePreviewVideoUrl) && (
+                    <button
+                      type="button"
+                      onClick={() => setVideoTestUrl(newCoursePreviewVideoUrl)}
+                      className="px-2.5 py-1 bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Play className="w-3 h-3 text-red-600" />
+                      <span>Xem thử video</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCoursePreviewVideoUrl}
+                    onChange={(e) => setNewCoursePreviewVideoUrl(e.target.value)}
+                    placeholder="Dán link YouTube giới thiệu (https://youtu.be/... hoặc https://www.youtube.com/watch?v=...)"
+                    className="flex-1 p-2.5 bg-white border border-stone-200 rounded-xl font-mono text-[11px] focus:outline-none focus:border-red-600"
+                  />
+                  {newCoursePreviewVideoUrl.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setNewCoursePreviewVideoUrl('')}
+                      className="px-2.5 py-2 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-xl text-[11px] font-bold cursor-pointer shrink-0"
+                      title="Xóa link video để chỉ hiển thị ảnh"
+                    >
+                      Xóa
+                    </button>
+                  )}
+                </div>
+
+                {newCoursePreviewVideoUrl.trim() ? (
+                  extractYouTubeId(newCoursePreviewVideoUrl) ? (
+                    <p className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        Đã nhận diện Video YouTube ID: <code className="font-mono bg-emerald-100 px-1 rounded">{extractYouTubeId(newCoursePreviewVideoUrl)}</code>
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-amber-700 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Link YouTube chưa đúng định dạng — nếu lưu lúc này, trang khóa học sẽ chỉ hiển thị ảnh đại diện.</span>
+                    </p>
+                  )
+                ) : (
+                  <p className="text-[11px] text-stone-500">
+                    Để trống nếu chưa có video giới thiệu — trang chi tiết khóa học sẽ chỉ hiển thị ảnh đại diện của khóa học.
+                  </p>
+                )}
+              </div>
+
               {/* Mô tả ngắn */}
               <div>
                 <label className="block font-bold text-stone-700 mb-1">Mô tả ngắn khóa học</label>
@@ -4770,36 +5756,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </button>
                     </span>
                   ))}
-                </div>
-              </div>
-
-              {/* Tài liệu đính kèm & Zalo hỗ trợ (Đã bỏ link Excel theo yêu cầu) */}
-              <div className="space-y-2 p-3 bg-stone-50 rounded-2xl border border-stone-200">
-                <label className="font-bold text-stone-900 flex items-center gap-1.5 text-xs">
-                  <FileText className="w-4 h-4 text-purple-600" />
-                  <span>Đường dẫn tài liệu & Nhóm Zalo hỗ trợ:</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-stone-600 mb-1 text-[11px]">Link PDF Công Thức (Google Drive / Firebase)</label>
-                    <input
-                      type="text"
-                      value={newCoursePdfUrl}
-                      onChange={(e) => setNewCoursePdfUrl(e.target.value)}
-                      placeholder="https://drive.google.com/..."
-                      className="w-full p-2.5 bg-white border border-stone-200 rounded-xl text-[11px] font-mono focus:outline-none focus:border-red-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-stone-600 mb-1 text-[11px]">Link Nhóm Zalo Hỗ Trợ 1-1</label>
-                    <input
-                      type="text"
-                      value={newCourseZaloLink}
-                      onChange={(e) => setNewCourseZaloLink(e.target.value)}
-                      placeholder="https://zalo.me/g/..."
-                      className="w-full p-2.5 bg-white border border-stone-200 rounded-xl text-[11px] font-mono focus:outline-none focus:border-red-600"
-                    />
-                  </div>
                 </div>
               </div>
 
@@ -5359,20 +6315,117 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </p>
                 </div>
 
-                {/* Requirement 2: Link Tài Liệu + Nút Tắt/Bật Cơ Chế Bán Công Thức */}
-                <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200 space-y-2.5">
+                {/* Requirement 2: Tài liệu PDF / Excel (Chỉ hiển thị cho học viên khi giảng viên đính kèm) */}
+                <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200 space-y-3">
                   <div>
-                    <label className="block font-bold text-stone-800 mb-1">
-                      Link Tài liệu (Google Drive hoặc PDF Firebase)
-                    </label>
-                    <input
-                      type="text"
-                      value={newLessonDocUrl}
-                      onChange={(e) => setNewLessonDocUrl(e.target.value)}
-                      placeholder="https://drive.google.com/file/..."
-                      className="w-full p-2.5 bg-white border border-stone-200 rounded-xl font-mono text-[11px]"
-                    />
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label className="font-bold text-stone-800 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-red-700" />
+                        <span>Tài liệu PDF / Drive bài học (Tùy chọn)</span>
+                      </label>
+                      <label className="px-2.5 py-1 bg-white hover:bg-red-50 text-red-700 border border-red-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer">
+                        <Upload className="w-3 h-3" />
+                        <span>Tải file từ máy</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              handleLessonFileUpload(f, (dataUrl, name) => {
+                                setNewLessonDocUrl(dataUrl);
+                                setNewLessonDocName(name);
+                              });
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newLessonDocUrl.startsWith('data:') ? (newLessonDocName || 'Đã tải file lên') : newLessonDocUrl}
+                        readOnly={newLessonDocUrl.startsWith('data:')}
+                        onChange={(e) => {
+                          setNewLessonDocUrl(e.target.value);
+                          setNewLessonDocName('');
+                        }}
+                        placeholder="Để trống nếu không có tài liệu, hoặc dán link Google Drive / tải file..."
+                        className="flex-1 p-2.5 bg-white border border-stone-200 rounded-xl font-mono text-[11px]"
+                      />
+                      {newLessonDocUrl.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewLessonDocUrl('');
+                            setNewLessonDocName('');
+                          }}
+                          className="px-2.5 py-2 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-xl text-[11px] font-bold cursor-pointer shrink-0"
+                        >
+                          Xóa
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <label className="font-bold text-stone-800 flex items-center gap-1.5">
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>File Excel / Bảng tính giá vốn (Tùy chọn)</span>
+                      </label>
+                      <label className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer">
+                        <Upload className="w-3 h-3" />
+                        <span>Tải Excel từ máy</span>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) {
+                              handleLessonFileUpload(f, (dataUrl, name) => {
+                                setNewLessonExcelUrl(dataUrl);
+                                setNewLessonExcelName(name);
+                              });
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newLessonExcelUrl.startsWith('data:') ? (newLessonExcelName || 'Đã tải file Excel') : newLessonExcelUrl}
+                        readOnly={newLessonExcelUrl.startsWith('data:')}
+                        onChange={(e) => {
+                          setNewLessonExcelUrl(e.target.value);
+                          setNewLessonExcelName('');
+                        }}
+                        placeholder="Để trống nếu không có file Excel, hoặc dán link Google Sheets / tải file..."
+                        className="flex-1 p-2.5 bg-white border border-stone-200 rounded-xl font-mono text-[11px]"
+                      />
+                      {newLessonExcelUrl.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewLessonExcelUrl('');
+                            setNewLessonExcelName('');
+                          }}
+                          className="px-2.5 py-2 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-xl text-[11px] font-bold cursor-pointer shrink-0"
+                        >
+                          Xóa
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-stone-600">
+                    Nếu để trống cả 2 ô trên, mục Tài liệu & File đính kèm sẽ <strong>không hiển thị</strong> trong bài học này.
+                  </p>
 
                   {/* Toggle switch for requirePaymentForDoc (Requirement 2) */}
                   <div className="p-3 bg-white rounded-xl border border-amber-300/80 shadow-2xs space-y-1.5">

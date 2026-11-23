@@ -1,4 +1,4 @@
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, deleteApp, FirebaseApp } from 'firebase/app';
 import { 
   getFirestore, 
   Firestore, 
@@ -10,13 +10,16 @@ import {
   deleteDoc, 
   query, 
   where, 
-  writeBatch 
+  writeBatch,
+  onSnapshot,
+  Unsubscribe
 } from 'firebase/firestore';
 import { StorageService } from './storage';
 import { Student, Instructor, Course, Enrollment, HomepageConfig, PaymentBankConfig, SePayConfig } from '../types';
 
 let appInstance: FirebaseApp | null = null;
 let dbInstance: Firestore | null = null;
+let activeConfigSignature = '';
 
 /**
  * Sanitizes object data for Firestore by removing any `undefined` values.
@@ -42,29 +45,47 @@ export const FirebaseService = {
   init(): { success: boolean; error?: string } {
     try {
       const config = StorageService.getFirebaseConfig();
-      const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || config.apiKey;
-      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || config.projectId;
-      const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || config.authDomain || (projectId ? `${projectId}.firebaseapp.com` : '');
-      const storageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || config.storageBucket || (projectId ? `${projectId}.appspot.com` : '');
-      const messagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || config.messagingSenderId || '';
-      const appId = import.meta.env.VITE_FIREBASE_APP_ID || config.appId || '';
+      const apiKey = (import.meta.env.VITE_FIREBASE_API_KEY || config.apiKey || '').trim();
+      const projectId = (import.meta.env.VITE_FIREBASE_PROJECT_ID || config.projectId || '').trim();
+      const authDomain = (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || config.authDomain || (projectId ? `${projectId}.firebaseapp.com` : '')).trim();
+      const storageBucket = (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || config.storageBucket || (projectId ? `${projectId}.appspot.com` : '')).trim();
+      const messagingSenderId = (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || config.messagingSenderId || '').trim();
+      const appId = (import.meta.env.VITE_FIREBASE_APP_ID || config.appId || '').trim();
 
       if (!apiKey || !projectId) {
         return { success: false, error: 'Chưa điền Firebase API Key và Project ID' };
       }
 
-      // Re-initialize if config changed or not yet initialized
-      if (getApps().length === 0) {
+      const nextSignature = `${apiKey}|${projectId}|${appId}`;
+      const existingApps = getApps();
+
+      if (existingApps.length === 0) {
         appInstance = initializeApp({
-          apiKey: apiKey.trim(),
-          authDomain: authDomain.trim(),
-          projectId: projectId.trim(),
-          storageBucket: storageBucket.trim(),
-          messagingSenderId: messagingSenderId.trim(),
-          appId: appId.trim()
+          apiKey,
+          authDomain,
+          projectId,
+          storageBucket,
+          messagingSenderId,
+          appId
         });
+        activeConfigSignature = nextSignature;
+      } else if (activeConfigSignature && activeConfigSignature !== nextSignature) {
+        // Re-initialize cleanly when credentials changed in Admin
+        const prevApp = appInstance || existingApps[0];
+        dbInstance = null;
+        deleteApp(prevApp).catch(() => {});
+        appInstance = initializeApp({
+          apiKey,
+          authDomain,
+          projectId,
+          storageBucket,
+          messagingSenderId,
+          appId
+        }, `app-${Date.now()}`);
+        activeConfigSignature = nextSignature;
       } else {
-        appInstance = getApps()[0];
+        appInstance = existingApps[0];
+        activeConfigSignature = nextSignature;
       }
 
       dbInstance = getFirestore(appInstance);
@@ -344,6 +365,7 @@ export const FirebaseService = {
       const instructors: Instructor[] = [];
       if (instSnap && !instSnap.empty) {
         instSnap.forEach(d => instructors.push(d.data() as Instructor));
+        instructors.sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER));
       }
 
       const courses: Course[] = [];
@@ -384,6 +406,94 @@ export const FirebaseService = {
       console.warn('Error loading remote data from Firestore:', e);
       return null;
     }
+  },
+
+  subscribeToRealtimeUpdates(handlers: {
+    onHomepageConfig?: (config: HomepageConfig) => void;
+    onPaymentConfig?: (data: { bankConfig?: PaymentBankConfig; sepayConfig?: SePayConfig }) => void;
+    onInstructors?: (instructors: Instructor[]) => void;
+    onCourses?: (courses: Course[]) => void;
+  }): () => void {
+    if (!this.isConfigured()) return () => {};
+    const db = this.getDb();
+    if (!db) return () => {};
+
+    const unsubscribers: Unsubscribe[] = [];
+
+    if (handlers.onHomepageConfig) {
+      unsubscribers.push(
+        onSnapshot(
+          doc(db, 'settings', 'homepage'),
+          (snap) => {
+            if (snap.exists() && !snap.metadata.hasPendingWrites) {
+              handlers.onHomepageConfig?.(snap.data() as HomepageConfig);
+            }
+          },
+          (err) => console.warn('Realtime homepage listener skipped:', err)
+        )
+      );
+    }
+
+    if (handlers.onPaymentConfig) {
+      unsubscribers.push(
+        onSnapshot(
+          doc(db, 'settings', 'payment'),
+          (snap) => {
+            if (snap.exists() && !snap.metadata.hasPendingWrites) {
+              const pData = snap.data();
+              handlers.onPaymentConfig?.({
+                bankConfig: pData.bankConfig as PaymentBankConfig | undefined,
+                sepayConfig: pData.sepayConfig as SePayConfig | undefined
+              });
+            }
+          },
+          (err) => console.warn('Realtime payment listener skipped:', err)
+        )
+      );
+    }
+
+    if (handlers.onInstructors) {
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, 'instructors'),
+          (snap) => {
+            if (!snap.empty && !snap.metadata.hasPendingWrites) {
+              const list: Instructor[] = [];
+              snap.forEach(d => list.push(d.data() as Instructor));
+              list.sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER));
+              handlers.onInstructors?.(list);
+            }
+          },
+          (err) => console.warn('Realtime instructors listener skipped:', err)
+        )
+      );
+    }
+
+    if (handlers.onCourses) {
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, 'courses'),
+          (snap) => {
+            if (!snap.empty && !snap.metadata.hasPendingWrites) {
+              const list: Course[] = [];
+              snap.forEach(d => list.push(d.data() as Course));
+              handlers.onCourses?.(list);
+            }
+          },
+          (err) => console.warn('Realtime courses listener skipped:', err)
+        )
+      );
+    }
+
+    return () => {
+      unsubscribers.forEach(unsub => {
+        try {
+          unsub();
+        } catch {
+          // ignore
+        }
+      });
+    };
   },
 
   // ==========================================

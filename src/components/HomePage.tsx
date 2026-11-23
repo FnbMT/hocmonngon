@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
 import { 
   Star, 
-  BookOpen, 
   ArrowRight, 
   ChevronDown, 
+  ChevronRight,
   Sparkles,
-  Users,
   ChefHat,
-  CheckCircle2,
-  Phone,
   MessageCircle,
-  GraduationCap
+  UtensilsCrossed
 } from 'lucide-react';
 import { Course, Instructor, HomepageConfig } from '../types';
 import { StorageService } from '../services/storage';
@@ -18,17 +15,48 @@ import { StorageService } from '../services/storage';
 interface HomePageProps {
   courses: Course[];
   instructors: Instructor[];
+  cartCourseIds?: string[];
   onSelectCourse: (course: Course) => void;
   onSelectTrial: (courseId?: string) => void;
+  onBuyNow: (course: Course) => void;
+  onAddToCart: (course: Course) => void;
+  onOpenCart?: () => void;
   onNavigate: (view: string, params?: Record<string, unknown>) => void;
   onQuickTrialSubmit: (data: { name: string; contact: string; field: string }) => void;
 }
 
+const CourseCardThumbnail: React.FC<{ src: string; alt: string }> = ({ src, alt }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (!src || hasError) {
+    return (
+      <div className="w-full h-full bg-linear-to-br from-stone-100 via-amber-50 to-stone-200 flex flex-col items-center justify-center p-4 text-center">
+        <UtensilsCrossed className="w-8 h-8 text-[#0e4a38]/50 mb-1.5" />
+        <span className="text-[11px] font-bold text-stone-600 line-clamp-2">{alt}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      referrerPolicy="no-referrer"
+      onError={() => setHasError(true)}
+      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+    />
+  );
+};
+
 export const HomePage: React.FC<HomePageProps> = ({
   courses,
   instructors,
+  cartCourseIds = [],
   onSelectCourse,
   onSelectTrial,
+  onBuyNow,
+  onAddToCart,
+  onOpenCart,
   onNavigate,
   onQuickTrialSubmit
 }) => {
@@ -38,6 +66,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [trialField, setTrialField] = useState('Món Việt truyền thống & Mở quán');
   const [trialSuccessMsg, setTrialSuccessMsg] = useState(false);
   const [homeConfig, setHomeConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
+  const [visibleLimits, setVisibleLimits] = useState<Record<string, number>>({});
 
   React.useEffect(() => {
     const handleUpdate = () => {
@@ -73,7 +102,16 @@ export const HomePage: React.FC<HomePageProps> = ({
     }
   };
 
-  const formatPrice = (p: number) => new Intl.NumberFormat('vi-VN').format(p) + 'đ';
+  const formatPriceVnd = (p: number) => new Intl.NumberFormat('en-US').format(p);
+
+  const handleExpandChefCourses = (limitKey: string, totalCourses: number) => {
+    const current = visibleLimits[limitKey] || 24;
+    if (totalCourses > current) {
+      setVisibleLimits(prev => ({ ...prev, [limitKey]: current + 24 }));
+    } else {
+      onNavigate('catalog');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#faf9f6]">
@@ -115,7 +153,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               {/* Social Proof Stats */}
               <div className="grid grid-cols-3 gap-6 pt-8 border-t border-stone-200">
                 <div>
-                  <p className="text-2xl sm:text-3xl font-black text-stone-900">
+                  <p className="text-2xl sm:text-3xl font-black text-stone-900 tabular-nums">
                     {homeConfig.hero.stats.studentsCount || '15,000+'}
                   </p>
                   <p className="text-xs text-stone-500 font-medium mt-0.5">
@@ -123,7 +161,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   </p>
                 </div>
                 <div>
-                  <p className="text-2xl sm:text-3xl font-black text-stone-900 flex items-center gap-1">
+                  <p className="text-2xl sm:text-3xl font-black text-stone-900 flex items-center gap-1 tabular-nums">
                     {homeConfig.hero.stats.ratingValue || '4.9'} <Star className="w-5 h-5 text-amber-500 fill-amber-500 inline" />
                   </p>
                   <p className="text-xs text-stone-500 font-medium mt-0.5">
@@ -131,7 +169,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   </p>
                 </div>
                 <div>
-                  <p className="text-2xl sm:text-3xl font-black text-stone-900">
+                  <p className="text-2xl sm:text-3xl font-black text-stone-900 tabular-nums">
                     {homeConfig.hero.stats.chefsCount || `${instructors.length}+`}
                   </p>
                   <p className="text-xs text-stone-500 font-medium mt-0.5">
@@ -147,8 +185,9 @@ export const HomePage: React.FC<HomePageProps> = ({
                 <div className="space-y-4">
                   <div className="relative mx-auto max-w-md rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-stone-900 group">
                     <img
-                      src={featuredChef.avatar || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=800&q=80'}
+                      src={featuredChef.avatar}
                       alt={featuredChef.name}
+                      referrerPolicy="no-referrer"
                       className="w-full h-[460px] object-cover object-top group-hover:scale-102 transition-transform duration-500"
                     />
                     
@@ -169,14 +208,14 @@ export const HomePage: React.FC<HomePageProps> = ({
                       </div>
                       <button
                         onClick={() => scrollToChefSection(featuredChef.id)}
-                        className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold rounded-lg transition-colors cursor-pointer shrink-0"
+                        className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-bold rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                       >
                         Xem khóa học
                       </button>
                     </div>
                   </div>
 
-                  {/* Switch Featured Chef Quick Carousel / Pills */}
+                  {/* Switch Featured Chef Quick Carousel */}
                   {instructors.length > 1 && (
                     <div className="flex items-center justify-center gap-2 overflow-x-auto py-2">
                       <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider shrink-0">
@@ -186,7 +225,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                         <button
                           key={chef.id}
                           onClick={() => setSelectedHeroChefId(chef.id)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                             featuredChef.id === chef.id
                               ? 'bg-red-700 text-white shadow-xs scale-105'
                               : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
@@ -195,6 +234,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                           <img
                             src={chef.avatar}
                             alt={chef.name}
+                            referrerPolicy="no-referrer"
                             className="w-4 h-4 rounded-full object-cover"
                           />
                           <span>{chef.name.split(' ').slice(-2).join(' ')}</span>
@@ -215,36 +255,54 @@ export const HomePage: React.FC<HomePageProps> = ({
         </div>
       </section>
 
-      {/* DYNAMIC INSTRUCTOR SECTIONS: Every Instructor and their Courses displayed sequentially from top to bottom */}
+      {/* DYNAMIC INSTRUCTOR SECTIONS */}
       {instructors.map((chef, idx) => {
         const chefCourses = courses.filter(c => c.instructorId === chef.id);
+        const groups = (chef.courseGroups && chef.courseGroups.length > 0)
+          ? chef.courseGroups
+          : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+        const groupedCourses = groups.map((groupName, gIdx) => {
+          const normalized = groupName.trim().toLowerCase();
+          const matched = chefCourses.filter(c => {
+            const cGroup = (c.courseGroup || '').trim().toLowerCase();
+            if (!cGroup) return gIdx === 0;
+            if (cGroup === normalized) return true;
+            if (gIdx === 0 && !groups.some(g => g.trim().toLowerCase() === cGroup)) return true;
+            return false;
+          });
+          return { groupName, courses: matched };
+        });
+        const activeGroups = groupedCourses.filter((g, gIdx) => g.courses.length > 0 || (chefCourses.length > 0 && gIdx === 0));
         const isEven = idx % 2 === 0;
 
         return (
           <section
             key={chef.id}
             id={`chef-section-${chef.id}`}
-            className={`py-16 border-b border-stone-200 transition-colors ${
-              isEven ? 'bg-[#faf9f6]' : 'bg-white'
+            className={`py-14 border-b border-stone-200 transition-colors ${
+              isEven ? 'bg-[#faf7ef]' : 'bg-[#f6f3ea]'
             }`}
           >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
               {/* Chef Header Profile */}
-              <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-10 gap-6">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 pb-6 border-b border-stone-200/80 gap-6">
                 <div className="flex items-start gap-4">
                   <img
-                    src={chef.avatar || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80'}
+                    src={chef.avatar}
                     alt={chef.name}
-                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-3 ring-red-100 shadow-sm shrink-0"
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-2 ring-[#0e4a38]/20 shadow-xs shrink-0"
                   />
                   <div className="space-y-1">
-                    <span className="text-[11px] uppercase font-extrabold tracking-wider text-red-700 bg-red-50 px-2.5 py-0.5 rounded-full inline-block">
-                      {chef.badge || chef.specialty || 'CHUYÊN GIA ẨM THỰC'}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[#0e4a38]">
+                      <span>{chef.badge || chef.specialty || 'CHUYÊN GIA ẨM THỰC'}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="text-stone-500 tabular-nums">{chefCourses.length} khóa học</span>
+                    </div>
                     <h2 className="text-2xl sm:text-3xl font-black text-stone-900 tracking-tight uppercase">
                       {chef.name}
                     </h2>
-                    <p className="text-xs text-stone-500 font-medium">
+                    <p className="text-xs text-stone-600 font-medium">
                       {chef.title}
                     </p>
                   </div>
@@ -256,140 +314,163 @@ export const HomePage: React.FC<HomePageProps> = ({
                     {chef.bio}
                   </p>
                   {(chef.phone || chef.zalo) && (
-                    <div className="flex items-center gap-3 text-xs text-stone-500 font-semibold pt-1">
-                      <span className="flex items-center gap-1 text-emerald-700">
+                    <div className="flex items-center gap-3 text-xs text-stone-600 font-semibold pt-0.5">
+                      <span className="flex items-center gap-1 text-[#0e4a38]">
                         <MessageCircle className="w-3.5 h-3.5" />
-                        Zalo/Hotline hỗ trợ: <strong className="text-stone-900 font-mono">{chef.phone || chef.zalo}</strong>
+                        Zalo/Hotline hỗ trợ: <strong className="text-stone-900 font-mono tabular-nums">{chef.phone || chef.zalo}</strong>
                       </span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Course Grid for this Chef */}
+              {/* Course Groups (Per Instructor) */}
               {chefCourses.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {chefCourses.slice(0, 3).map((course, cIdx) => (
-                      <div
-                        key={course.id}
-                        className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col group"
-                      >
-                        <div className="relative aspect-16/10 overflow-hidden bg-stone-100">
-                          <img
-                            src={course.thumbnail || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80'}
-                            alt={course.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                          <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                            {(() => {
-                              // If course explicitly configured to not show badge
-                              if (course.badge === 'none' || course.badge === '') return null;
+                <div className="space-y-14">
+                  {activeGroups.map(({ groupName, courses: groupCourses }) => {
+                    const limitKey = `${chef.id}::${groupName}`;
+                    const currentLimit = visibleLimits[limitKey] || 24;
+                    const visibleCourses = groupCourses.slice(0, currentLimit);
+                    const remainingCount = Math.max(0, groupCourses.length - currentLimit);
 
-                              let badgeText = course.badge;
-                              let badgeColor = course.badgeColor;
-
-                              // Fallback if not configured
-                              if (!badgeText) {
-                                if (cIdx === 0) { badgeText = 'Bán chạy nhất'; badgeColor = 'red'; }
-                                else if (cIdx === 1) { badgeText = 'Chuyên sâu mở quán'; badgeColor = 'dark'; }
-                                else { badgeText = 'Công thức độc quyền'; badgeColor = 'amber'; }
-                              }
-
-                              const colorClass = 
-                                badgeColor === 'dark' ? 'bg-stone-900 text-white' :
-                                badgeColor === 'amber' ? 'bg-amber-600 text-white' :
-                                badgeColor === 'emerald' ? 'bg-emerald-700 text-white' :
-                                badgeColor === 'purple' ? 'bg-purple-700 text-white' :
-                                badgeColor === 'blue' ? 'bg-blue-700 text-white' :
-                                'bg-red-700 text-white';
-
-                              return (
-                                <span className={`px-2.5 py-1 rounded ${colorClass} text-[11px] font-bold shadow-xs`}>
-                                  {badgeText}
-                                </span>
-                              );
-                            })()}
-                          </div>
+                    return (
+                      <div key={limitKey}>
+                        {/* Centered Group Heading matching screenshot */}
+                        <div className="text-center mb-8">
+                          <h3 className="text-xl sm:text-2xl font-bold text-[#0e4a38] uppercase tracking-wide inline-block">
+                            {groupName}
+                          </h3>
+                          <div className="w-64 sm:w-80 h-[2px] bg-[#0e4a38] mx-auto mt-2.5 mb-2" />
+                          <p className="text-xs sm:text-[13px] text-stone-600">
+                            (Nhấn vào hình ảnh để xem nội dung giới thiệu khoá học)
+                          </p>
                         </div>
 
-                        <div className="p-5 flex-1 flex flex-col justify-between">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3 text-xs text-stone-500">
-                              <span className="flex items-center gap-1 font-medium">
-                                <BookOpen className="w-3.5 h-3.5 text-stone-400" />
-                                {course.chapters.reduce((acc, chap) => acc + chap.lessons.length, 0) || 12} bài học ({course.durationHours} giờ)
-                              </span>
-                              <span>•</span>
-                              <span className="text-amber-700 font-semibold">{course.level}</span>
-                            </div>
+                        {/* Course Grid (6 Columns Desktop, Max 24 Courses Initial) */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5 sm:gap-4">
+                          {visibleCourses.map((course) => {
+                            const inCart = cartCourseIds.includes(course.id);
+                            const cleanTitle = course.title.split(' - ')[0];
 
-                            <h3 
-                              onClick={() => onSelectCourse(course)}
-                              className="font-bold text-lg text-stone-900 group-hover:text-red-700 cursor-pointer transition-colors line-clamp-2"
-                              title={course.title}
+                            return (
+                              <article
+                                key={course.id}
+                                className="bg-white rounded-lg border border-stone-200 overflow-hidden shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col group"
+                              >
+                                {/* Square Clickable Image */}
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectCourse(course)}
+                                  className="relative aspect-square w-full overflow-hidden bg-stone-100 cursor-pointer block text-left"
+                                  title={`Xem chi tiết: ${course.title}`}
+                                >
+                                  <CourseCardThumbnail
+                                    src={course.thumbnail}
+                                    alt={cleanTitle}
+                                  />
+                                </button>
+
+                                {/* Card Info & Actions */}
+                                <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between gap-2 bg-white">
+                                  <div className="space-y-1.5">
+                                    <h4
+                                      onClick={() => onSelectCourse(course)}
+                                      className="text-[12.5px] sm:text-[13px] font-semibold text-stone-800 group-hover:text-[#0e4a38] leading-snug line-clamp-2 min-h-[2.3rem] uppercase cursor-pointer transition-colors"
+                                      title={course.title}
+                                    >
+                                      {cleanTitle}
+                                    </h4>
+
+                                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                                      <span className="text-[13.5px] font-bold text-[#dc2626] tabular-nums">
+                                        {formatPriceVnd(course.discountPrice)} <span className="underline decoration-1 underline-offset-2">₫</span>
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* MUA NGAY & THÊM GIỎ */}
+                                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => onBuyNow(course)}
+                                      className="py-1.5 px-1 bg-[#0e4a38] hover:bg-[#093628] text-white font-bold text-[10.5px] sm:text-[11px] rounded-[5px] uppercase tracking-tight whitespace-nowrap cursor-pointer transition-colors text-center"
+                                    >
+                                      MUA NGAY
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (inCart && onOpenCart) {
+                                          onOpenCart();
+                                        } else {
+                                          onAddToCart(course);
+                                        }
+                                      }}
+                                      className={`py-1.5 px-1 text-white font-bold text-[10.5px] sm:text-[11px] rounded-[5px] uppercase tracking-tight whitespace-nowrap cursor-pointer transition-colors text-center ${
+                                        inCart
+                                          ? 'bg-emerald-700 hover:bg-emerald-800'
+                                          : 'bg-[#0e4a38] hover:bg-[#093628]'
+                                      }`}
+                                      title={inCart ? 'Đã có trong giỏ hàng - Nhấn để mở giỏ' : 'Thêm khóa học vào giỏ hàng'}
+                                    >
+                                      {inCart ? 'ĐÃ THÊM ✓' : 'THÊM GIỎ'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+
+                        {/* Centered Yellow "XEM THÊM >" Button */}
+                        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleExpandChefCourses(limitKey, groupCourses.length)}
+                            className="px-8 py-2.5 bg-[#f6c445] hover:bg-[#eab308] text-stone-950 font-bold text-xs sm:text-[13px] rounded-full shadow-xs hover:shadow transition-all inline-flex items-center gap-1.5 cursor-pointer uppercase whitespace-nowrap"
+                          >
+                            <span>
+                              {remainingCount > 0
+                                ? `XEM THÊM (${remainingCount} KHÓA)`
+                                : 'XEM THÊM'}
+                            </span>
+                            <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+
+                          {currentLimit > 24 && (
+                            <button
+                              type="button"
+                              onClick={() => setVisibleLimits(prev => ({ ...prev, [limitKey]: 24 }))}
+                              className="text-xs font-bold text-stone-600 hover:text-stone-900 underline cursor-pointer px-3 py-1"
                             >
-                              {course.title.split(' - ')[0]}
-                            </h3>
-
-                            <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed">
-                              {course.shortDescription}
-                            </p>
-                          </div>
-
-                          <div className="pt-4 mt-4 border-t border-stone-100">
-                            <div className="flex items-baseline justify-between mb-3">
-                              <div>
-                                <span className="text-[11px] text-stone-400 block font-medium">Học phí trọn đời</span>
-                                <span className="text-lg font-black text-red-700">
-                                  {formatPrice(course.discountPrice)}
-                                </span>
-                              </div>
-                              <span className="text-xs text-stone-400 line-through">
-                                {formatPrice(course.originalPrice)}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                onClick={() => onSelectTrial(course.id)}
-                                className="py-2 px-3 text-xs font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors cursor-pointer text-center"
-                              >
-                                Học thử miễn phí
-                              </button>
-                              <button
-                                onClick={() => onSelectCourse(course)}
-                                className="py-2 px-3 text-xs font-bold text-white bg-red-700 hover:bg-red-800 rounded-lg shadow-xs transition-colors cursor-pointer text-center"
-                              >
-                                Xem chi tiết
-                              </button>
-                            </div>
-                          </div>
+                              Thu gọn về 24 khóa
+                            </button>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-8 text-center">
-                    <button
-                      onClick={() => onNavigate('catalog', { chefId: chef.id })}
-                      className="inline-flex items-center gap-2 text-sm font-bold text-red-700 hover:text-red-800 cursor-pointer group"
-                    >
-                      <span>Xem tất cả {chefCourses.length} khóa học của {chef.name}</span>
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                  </div>
-                </>
+                    );
+                  })}
+                </div>
               ) : (
-                /* Empty state when instructor has no courses yet (e.g. freshly added instructor) */
-                <div className="bg-stone-50 border-2 border-dashed border-stone-200 rounded-2xl p-8 sm:p-10 text-center max-w-2xl mx-auto space-y-4">
-                  <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-700 flex items-center justify-center mx-auto shadow-2xs">
+                <>
+                  <div className="text-center mb-8">
+                    <h3 className="text-xl sm:text-2xl font-bold text-[#0e4a38] uppercase tracking-wide inline-block">
+                      {groups[0]}
+                    </h3>
+                    <div className="w-64 sm:w-80 h-[2px] bg-[#0e4a38] mx-auto mt-2.5 mb-2" />
+                    <p className="text-xs sm:text-[13px] text-stone-600">
+                      (Nhấn vào hình ảnh để xem nội dung giới thiệu khoá học)
+                    </p>
+                  </div>
+                  {/* Empty state when instructor has no courses yet */}
+                <div className="bg-white border border-stone-200 rounded-2xl p-8 sm:p-10 text-center max-w-2xl mx-auto space-y-4 shadow-xs">
+                  <div className="w-14 h-14 rounded-2xl bg-[#0e4a38]/10 text-[#0e4a38] flex items-center justify-center mx-auto">
                     <ChefHat className="w-7 h-7" />
                   </div>
                   <div className="space-y-1.5">
-                    <h3 className="font-bold text-stone-900 text-base">
+                    <h4 className="font-bold text-stone-900 text-base">
                       Khóa học của Bếp trưởng {chef.name} đang được chuẩn bị
-                    </h3>
+                    </h4>
                     <p className="text-xs text-stone-500 leading-relaxed max-w-md mx-auto">
                       {chef.name} đang hoàn thiện giáo trình chi tiết, quay video bài giảng thực tế và định lượng gram chuẩn vị. Hãy đăng ký nhận thông báo sớm nhất ngay khi khóa học được phát hành!
                     </p>
@@ -397,7 +478,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                     <button
                       onClick={() => onSelectTrial()}
-                      className="px-5 py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                      className="px-5 py-2.5 bg-[#0e4a38] hover:bg-[#093628] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                     >
                       Đăng ký nhận thông báo học thử
                     </button>
@@ -409,6 +490,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                     </button>
                   </div>
                 </div>
+                </>
               )}
             </div>
           </section>

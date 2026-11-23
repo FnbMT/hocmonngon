@@ -1,5 +1,6 @@
 import { BankOption, PaymentBankConfig, SePayConfig, SePayTransaction, Course, Student } from '../types';
 import { StorageService } from './storage';
+import { DevPersistence } from './devPersistence';
 
 export const POPULAR_VIETNAM_BANKS: BankOption[] = [
   { bin: '970422', shortName: 'MB', name: 'MBBank - Ngân hàng Quân Đội', code: 'MBBank' },
@@ -70,10 +71,21 @@ export const PaymentService = {
     }
   },
 
+  setBankConfigFromRemote(config: PaymentBankConfig): void {
+    try {
+      localStorage.setItem(KEYS.BANK_CONFIG, JSON.stringify(config));
+      window.dispatchEvent(new Event('payment_config_updated'));
+      DevPersistence.scheduleSave();
+    } catch (e) {
+      console.error('Error setting remote bank config:', e);
+    }
+  },
+
   saveBankConfig(config: PaymentBankConfig): void {
     try {
       localStorage.setItem(KEYS.BANK_CONFIG, JSON.stringify(config));
       window.dispatchEvent(new Event('payment_config_updated'));
+      DevPersistence.scheduleSave();
       import('./firebase').then(({ FirebaseService }) => {
         if (FirebaseService.isConfigured()) {
           FirebaseService.syncPaymentConfigToFirebase(config, PaymentService.getSePayConfig()).catch(() => {});
@@ -105,10 +117,21 @@ export const PaymentService = {
     }
   },
 
+  setSePayConfigFromRemote(config: SePayConfig): void {
+    try {
+      localStorage.setItem(KEYS.SEPAY_CONFIG, JSON.stringify(config));
+      window.dispatchEvent(new Event('payment_config_updated'));
+      DevPersistence.scheduleSave();
+    } catch (e) {
+      console.error('Error setting remote sepay config:', e);
+    }
+  },
+
   saveSePayConfig(config: SePayConfig): void {
     try {
       localStorage.setItem(KEYS.SEPAY_CONFIG, JSON.stringify(config));
       window.dispatchEvent(new Event('payment_config_updated'));
+      DevPersistence.scheduleSave();
       import('./firebase').then(({ FirebaseService }) => {
         if (FirebaseService.isConfigured()) {
           FirebaseService.syncPaymentConfigToFirebase(PaymentService.getBankConfig(), config).catch(() => {});

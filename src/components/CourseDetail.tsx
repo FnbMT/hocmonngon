@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Star, 
   Clock, 
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { Course, Lesson, Student, Enrollment } from '../types';
 import { StorageService } from '../services/storage';
-import { toYouTubeEmbedUrl } from '../utils/youtube';
+import { toYouTubeEmbedUrl, extractYouTubeId } from '../utils/youtube';
 import { getLessonUnlockStatus, getChapterUnlockStatus } from '../utils/learningProgress';
 
 interface CourseDetailProps {
@@ -55,12 +55,18 @@ export const CourseDetail: React.FC<CourseDetailProps> = ({
   });
   const [playingVideo, setPlayingVideo] = useState(false);
 
+  useEffect(() => {
+    setPlayingVideo(false);
+  }, [course.id]);
+
   const toggleChapter = (chapterId: string) => {
     setOpenChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
   };
 
   const totalLessons = course.chapters.reduce((acc, c) => acc + c.lessons.length, 0);
   const trialLessons = course.chapters.flatMap(c => c.lessons).filter(l => l.isFreeTrial);
+  const firstTrialLesson = trialLessons[0];
+  const hasPreviewVideo = Boolean(extractYouTubeId(course.previewVideoUrl));
 
   const formatPrice = (p: number) => new Intl.NumberFormat('vi-VN').format(p) + 'đ';
 
@@ -127,9 +133,9 @@ export const CourseDetail: React.FC<CourseDetailProps> = ({
               </div>
             </div>
 
-            {/* Video Player Preview Box matching Image 1 */}
+            {/* Course Media Preview Box: YouTube Intro Video if configured, otherwise Course Image only */}
             <div className="relative rounded-2xl overflow-hidden shadow-2xl bg-stone-950 aspect-16/9 group border-2 border-stone-800">
-              {playingVideo ? (
+              {hasPreviewVideo && playingVideo ? (
                 <iframe
                   src={toYouTubeEmbedUrl(course.previewVideoUrl, { autoplay: true })}
                   title={course.title}
@@ -138,7 +144,7 @@ export const CourseDetail: React.FC<CourseDetailProps> = ({
                   allowFullScreen
                   className="w-full h-full border-0"
                 />
-              ) : (
+              ) : hasPreviewVideo ? (
                 <div 
                   onClick={() => setPlayingVideo(true)}
                   className="w-full h-full relative cursor-pointer"
@@ -153,10 +159,10 @@ export const CourseDetail: React.FC<CourseDetailProps> = ({
                   {/* Header overlay text */}
                   <div className="absolute top-4 left-5 right-5 flex items-center justify-between">
                     <span className="text-white text-xs sm:text-sm font-bold bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10">
-                      Học Món Ngon - Chi Tiết Khóa Học {course.title.split(' - ')[0]}
+                      Học Món Ngon - Giới Thiệu Khóa Học {course.title.split(' - ')[0]}
                     </span>
                     <span className="hidden sm:inline-block text-[11px] font-bold text-amber-400 bg-black/60 px-2.5 py-1 rounded">
-                      Masterclass
+                      Video giới thiệu
                     </span>
                   </div>
 
@@ -167,15 +173,52 @@ export const CourseDetail: React.FC<CourseDetailProps> = ({
                     </div>
                   </div>
 
-                  {/* Bottom Preview Bar matching Image 1 */}
+                  {/* Bottom Preview Bar */}
                   <div className="absolute bottom-4 left-4 right-4 bg-black/70 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 flex items-center justify-between text-white text-xs sm:text-sm font-semibold">
                     <span>
-                      Xem bài học thử 1: {course.chapters[0]?.lessons[0]?.title || 'Bí quyết chọn xương và ninh nước dùng'} - {course.chapters[0]?.lessons[0]?.durationMinutes || 18} phút
+                      {firstTrialLesson
+                        ? `Xem video giới thiệu hoặc học thử bài 1: ${firstTrialLesson.title} (${firstTrialLesson.durationMinutes} phút)`
+                        : 'Bấm để xem video giới thiệu khóa học'}
                     </span>
                     <span className="text-red-400 hover:text-red-300 underline font-bold shrink-0 ml-2">
-                      Xem ngay
+                      Xem video
                     </span>
                   </div>
+                </div>
+              ) : (
+                <div className="w-full h-full relative">
+                  <img
+                    src={course.thumbnail || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80'}
+                    alt={course.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-stone-950/70 via-transparent to-stone-950/30" />
+
+                  <div className="absolute top-4 left-5 right-5 flex items-center justify-between">
+                    <span className="text-white text-xs sm:text-sm font-bold bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10">
+                      {course.title}
+                    </span>
+                    {course.badge && course.badge !== 'none' && (
+                      <span className="hidden sm:inline-block text-[11px] font-bold text-amber-400 bg-black/60 px-2.5 py-1 rounded">
+                        {course.badge}
+                      </span>
+                    )}
+                  </div>
+
+                  {firstTrialLesson && (
+                    <button
+                      type="button"
+                      onClick={() => onStartTrial(course, firstTrialLesson.id)}
+                      className="absolute bottom-4 left-4 right-4 bg-black/75 hover:bg-black/85 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/15 flex items-center justify-between text-white text-xs sm:text-sm font-semibold cursor-pointer transition-colors text-left"
+                    >
+                      <span className="truncate">
+                        Xem bài học thử 1: {firstTrialLesson.title} - {firstTrialLesson.durationMinutes} phút
+                      </span>
+                      <span className="text-amber-400 hover:text-amber-300 underline font-bold shrink-0 ml-3">
+                        Học thử ngay
+                      </span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -316,16 +359,13 @@ export const CourseDetail: React.FC<CourseDetailProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-2xl font-black text-stone-900 tracking-tight">
-                  Giáo Trình {totalLessons} Bài Học
+                  Giáo Trình Bài Học
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                   Mở khóa tuần tự
                 </span>
               </div>
-              <p className="text-xs text-stone-500 mt-1">
-                Lộ trình chuẩn Bếp trưởng: Hoàn thành bài học trước để mở khóa bài tiếp theo và mở khóa chương mới
-              </p>
             </div>
             <span className="text-xs font-bold text-stone-600">
               Tổng thời lượng: {course.durationHours} giờ

@@ -11,7 +11,8 @@ import {
   ChefHat, 
   ChevronDown,
   Menu,
-  X
+  X,
+  ShoppingBag
 } from 'lucide-react';
 import { Student, HomepageConfig } from '../types';
 import { StorageService } from '../services/storage';
@@ -22,6 +23,8 @@ interface HeaderProps {
   currentUser: Student | null;
   onOpenAuth: () => void;
   onLogout: () => void;
+  cartCount?: number;
+  onOpenCart?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -29,7 +32,9 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigate,
   currentUser,
   onOpenAuth,
-  onLogout
+  onLogout,
+  cartCount = 0,
+  onOpenCart
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -124,7 +129,24 @@ export const Header: React.FC<HeaderProps> = ({
           </form>
 
           {/* Right Action Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 shrink-0">
+            {onOpenCart && (
+              <button
+                type="button"
+                onClick={onOpenCart}
+                className="relative p-2.5 rounded-xl bg-stone-100 hover:bg-[#0e4a38] text-stone-700 hover:text-white transition-colors cursor-pointer shrink-0"
+                title="Giỏ hàng khóa học"
+                aria-label={`Giỏ hàng (${cartCount} khóa học)`}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center shadow-xs tabular-nums border-2 border-white">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             {currentUser ? (
               <div className="relative">
                 <button

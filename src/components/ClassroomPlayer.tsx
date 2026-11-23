@@ -164,10 +164,33 @@ export const ClassroomPlayer: React.FC<ClassroomPlayerProps> = ({
     } catch {}
   }, [currentLesson.id, course.id, effectiveEnrollment?.studentId, currentUser?.id]);
 
+  const isRealDocumentUrl = (url?: string): string => {
+    const trimmed = (url || '').trim();
+    if (!trimmed) return '';
+    const legacyPlaceholders = [
+      'https://drive.google.com',
+      'https://drive.google.com/file/sample-cong-thuc',
+      'https://drive.google.com/file/d/sample-cong-thuc',
+      'https://docs.google.com/spreadsheets/sample-tinh-cost'
+    ];
+    if (legacyPlaceholders.includes(trimmed)) return '';
+    return trimmed;
+  };
+
+  const lessonPdfUrl = isRealDocumentUrl(currentLesson.recipeDocumentUrl);
+  const lessonExcelUrl = isRealDocumentUrl(currentLesson.excelCostSheetUrl);
+  const hasUploadedDocuments = Boolean(lessonPdfUrl || lessonExcelUrl);
+
+  useEffect(() => {
+    if (!hasUploadedDocuments && activeTab === 'docs') {
+      setActiveTab('recipe');
+    }
+  }, [hasUploadedDocuments, activeTab, currentLesson.id]);
+
   const isCompleted = completedLessonIds.includes(currentLesson.id);
   const parentChapter = course.chapters.find(chap => chap.lessons.some(l => l.id === currentLesson.id));
   const isChapterFree = parentChapter?.isFree !== false;
-  const isDocLocked = !isPaid && currentLesson.requirePaymentForDoc;
+  const isDocLocked = hasUploadedDocuments && !isPaid && currentLesson.requirePaymentForDoc;
 
   // Calculate sequential unlock status of the currently viewed lesson
   const currentLessonUnlockStatus = getLessonUnlockStatus(
@@ -744,14 +767,16 @@ export const ClassroomPlayer: React.FC<ClassroomPlayerProps> = ({
             >
               Công thức chi tiết
             </button>
-            <button
-              onClick={() => setActiveTab('docs')}
-              className={`py-3 px-4 border-b-2 transition-colors cursor-pointer ${
-                activeTab === 'docs' ? 'border-red-600 text-red-500' : 'border-transparent text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              Tài liệu & File đính kèm
-            </button>
+            {hasUploadedDocuments && (
+              <button
+                onClick={() => setActiveTab('docs')}
+                className={`py-3 px-4 border-b-2 transition-colors cursor-pointer ${
+                  activeTab === 'docs' ? 'border-red-600 text-red-500' : 'border-transparent text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                Tài liệu & File đính kèm
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('notes')}
               className={`py-3 px-4 border-b-2 transition-colors cursor-pointer ${
@@ -816,10 +841,10 @@ export const ClassroomPlayer: React.FC<ClassroomPlayerProps> = ({
               </div>
             )}
 
-            {activeTab === 'docs' && (
+            {activeTab === 'docs' && hasUploadedDocuments && (
               <div className="space-y-4 max-w-xl">
                 <h3 className="font-extrabold text-white text-base">
-                  Tài liệu & Công thức độc quyền
+                  Tài liệu & Công thức đính kèm
                 </h3>
 
                 {isDocLocked ? (
@@ -832,7 +857,7 @@ export const ClassroomPlayer: React.FC<ClassroomPlayerProps> = ({
                         File Tài Liệu & Công Thức Yêu Cầu Thanh Toán
                       </h4>
                       <p className="text-xs text-stone-400">
-                        Bài học này cho phép xem video hướng dẫn miễn phí, nhưng file PDF công thức gram chuẩn và Excel tính giá cost được bán riêng kèm gói học trọn gói.
+                        Bài học này cho phép xem video hướng dẫn miễn phí, nhưng tài liệu công thức đính kèm được mở khóa khi đăng ký gói học trọn gói.
                       </p>
                     </div>
                     <button
@@ -844,55 +869,61 @@ export const ClassroomPlayer: React.FC<ClassroomPlayerProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="p-4 bg-stone-900 rounded-xl border border-stone-800 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-lg bg-red-950 text-red-500">
-                          <FileText className="w-5 h-5" />
+                    {lessonPdfUrl && (
+                      <div className="p-4 bg-stone-900 rounded-xl border border-stone-800 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2.5 rounded-lg bg-red-950 text-red-500 shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-white text-xs truncate">
+                              {currentLesson.recipeDocumentName || 'Tài liệu công thức bài học (PDF / Drive)'}
+                            </h4>
+                            <p className="text-[11px] text-stone-400">
+                              Tài liệu do giảng viên đính kèm cho bài học này
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-bold text-white text-xs">
-                            File PDF Công Thức Gram Chuẩn (Mở quán)
-                          </h4>
-                          <p className="text-[11px] text-stone-400">
-                            Định lượng chi tiết cho mẻ 50 - 200 bát • PDF 4.2 MB
-                          </p>
-                        </div>
+                        <a
+                          href={lessonPdfUrl}
+                          download={lessonPdfUrl.startsWith('data:') ? (currentLesson.recipeDocumentName || 'tai-lieu-bai-hoc.pdf') : undefined}
+                          target={lessonPdfUrl.startsWith('data:') ? undefined : '_blank'}
+                          rel={lessonPdfUrl.startsWith('data:') ? undefined : 'noopener noreferrer'}
+                          className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer text-stone-200 shrink-0"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Tải về</span>
+                        </a>
                       </div>
-                      <a
-                        href={currentLesson.recipeDocumentUrl || course.pdfRecipeUrl || 'https://drive.google.com'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer text-stone-200"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Tải về</span>
-                      </a>
-                    </div>
+                    )}
 
-                    <div className="p-4 bg-stone-900 rounded-xl border border-stone-800 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-lg bg-emerald-950 text-emerald-500">
-                          <FileSpreadsheet className="w-5 h-5" />
+                    {lessonExcelUrl && (
+                      <div className="p-4 bg-stone-900 rounded-xl border border-stone-800 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2.5 rounded-lg bg-emerald-950 text-emerald-500 shrink-0">
+                            <FileSpreadsheet className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-white text-xs truncate">
+                              {currentLesson.excelCostSheetName || 'Bảng tính giá vốn & File Excel đính kèm'}
+                            </h4>
+                            <p className="text-[11px] text-stone-400">
+                              File Excel do giảng viên đính kèm cho bài học này
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-bold text-white text-xs">
-                            Bảng Tính Giá Vốn & Lợi Nhuận Tự Động (Excel)
-                          </h4>
-                          <p className="text-[11px] text-stone-400">
-                            Tự động tính cost từng bát theo giá chợ địa phương • XLSX 1.8 MB
-                          </p>
-                        </div>
+                        <a
+                          href={lessonExcelUrl}
+                          download={lessonExcelUrl.startsWith('data:') ? (currentLesson.excelCostSheetName || 'bang-tinh-gia-von.xlsx') : undefined}
+                          target={lessonExcelUrl.startsWith('data:') ? undefined : '_blank'}
+                          rel={lessonExcelUrl.startsWith('data:') ? undefined : 'noopener noreferrer'}
+                          className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer text-stone-200 shrink-0"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Tải Excel</span>
+                        </a>
                       </div>
-                      <a
-                        href={course.excelCostSheetUrl || 'https://drive.google.com'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer text-stone-200"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Tải Excel</span>
-                      </a>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -6,6 +6,7 @@ import {
   INITIAL_ENROLLMENTS,
   INITIAL_QUESTIONS
 } from '../data/mockData';
+import { DevPersistence } from './devPersistence';
 
 const KEYS = {
   INSTRUCTORS: 'hocmonngon_instructors_v1',
@@ -134,8 +135,12 @@ function safeSet<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     window.dispatchEvent(new Event('storage_data_updated'));
+    DevPersistence.scheduleSave();
   } catch (e) {
     console.error(`Error writing ${key}:`, e);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('storage_quota_exceeded', { detail: { key } }));
+    }
   }
 }
 
@@ -154,16 +159,22 @@ export const StorageService = {
   // Instructors
   getInstructors(): Instructor[] {
     const list = safeGet<Instructor[]>(KEYS.INSTRUCTORS, INITIAL_INSTRUCTORS);
-    return list.map(inst => {
+    const mapped = list.map((inst, idx) => {
       const mock = INITIAL_INSTRUCTORS.find(m => m.id === inst.id);
+      const cleanGroups = (inst.courseGroups || [])
+        .map(g => g.trim())
+        .filter((g, i, arr) => g.length > 0 && arr.indexOf(g) === i);
       return {
         ...inst,
+        sortOrder: typeof inst.sortOrder === 'number' ? inst.sortOrder : idx,
         username: inst.username || mock?.username,
         password: inst.password || mock?.password,
         email: inst.email || mock?.email,
-        avatar: (inst.avatar && inst.avatar.trim()) ? inst.avatar : 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80'
+        avatar: (inst.avatar && inst.avatar.trim()) ? inst.avatar : 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80',
+        courseGroups: cleanGroups.length > 0 ? cleanGroups : ['KHÓA HỌC ONLINE MỞ QUÁN']
       };
     });
+    return mapped.sort((a, b) => (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999));
   },
   getInstructorById(id: string): Instructor | undefined {
     return this.getInstructors().find(inst => inst.id === id);
@@ -191,37 +202,141 @@ export const StorageService = {
   },
   setInstructorsFromRemote(instructors: Instructor[]): void {
     if (instructors && instructors.length > 0) {
-      safeSet(KEYS.INSTRUCTORS, instructors);
+      const sorted = [...instructors].sort(
+        (a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER)
+      );
+      safeSet(KEYS.INSTRUCTORS, sorted);
     }
   },
   addInstructor(instructor: Instructor): void {
-    const sanitized = {
+    const cleanGroups = (instructor.courseGroups || [])
+      .map(g => g.trim())
+      .filter((g, idx, arr) => g.length > 0 && arr.indexOf(g) === idx);
+    const sanitized: Instructor = {
       ...instructor,
-      avatar: (instructor.avatar && instructor.avatar.trim()) ? instructor.avatar : 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80'
+      sortOrder: 0,
+      avatar: (instructor.avatar && instructor.avatar.trim()) ? instructor.avatar : 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80',
+      courseGroups: cleanGroups.length > 0 ? cleanGroups : ['KHÓA HỌC ONLINE MỞ QUÁN']
     };
-    const list = this.getInstructors();
-    list.unshift(sanitized);
+    const existing = this.getInstructors().map((inst, idx) => ({
+      ...inst,
+      sortOrder: idx + 1
+    }));
+    const list = [sanitized, ...existing];
     safeSet(KEYS.INSTRUCTORS, list);
 
     // Sync to Firestore immediately
     syncToFirebase(async () => {
       const { FirebaseService } = await import('./firebase');
-      await FirebaseService.saveInstructor(sanitized);
+      for (const inst of list) {
+        await FirebaseService.saveInstructor(inst);
+      }
     });
   },
-  updateInstructor(instructor: Instructor): void {
-    const sanitized = {
+  updateInstructor(instructor: Instructor, groupRenames?: Record<string, string>): void {
+    const cleanGroups = (instructor.courseGroups || [])
+      .map(g => g.trim())
+      .filter((g, idx, arr) => g.length > 0 && arr.indexOf(g) === idx);
+    const finalGroups = cleanGroups.length > 0 ? cleanGroups : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+    const sanitized: Instructor = {
       ...instructor,
-      avatar: (instructor.avatar && instructor.avatar.trim()) ? instructor.avatar : 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80'
+      avatar: (instructor.avatar && instructor.avatar.trim()) ? instructor.avatar : 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80',
+      courseGroups: finalGroups
     };
     const list = this.getInstructors().map(item => item.id === instructor.id ? sanitized : item);
     safeSet(KEYS.INSTRUCTORS, list);
 
+    // Also sync instructorName, instructorAvatar, and any renamed/fallback courseGroup to their courses
+    const allCourses = this.getCourses();
+    const updatedCoursesToSync: Course[] = [];
+    const updatedCourseList = allCourses.map(c => {
+      if (c.instructorId !== sanitized.id) return c;
+      let nextGroup = c.courseGroup || finalGroups[0];
+      if (groupRenames && c.courseGroup && groupRenames[c.courseGroup]) {
+        nextGroup = groupRenames[c.courseGroup];
+      }
+      if (!finalGroups.some(g => g.toLowerCase() === nextGroup.trim().toLowerCase())) {
+        nextGroup = finalGroups[0];
+      }
+      const needsUpdate =
+        c.instructorName !== sanitized.name ||
+        c.instructorAvatar !== sanitized.avatar ||
+        c.courseGroup !== nextGroup;
+      if (needsUpdate) {
+        const nextCourse: Course = {
+          ...c,
+          instructorName: sanitized.name,
+          instructorAvatar: sanitized.avatar,
+          courseGroup: nextGroup
+        };
+        updatedCoursesToSync.push(nextCourse);
+        return nextCourse;
+      }
+      return c;
+    });
+    if (updatedCoursesToSync.length > 0) {
+      safeSet(KEYS.COURSES, updatedCourseList);
+    }
+
     // Sync to Firestore immediately
     syncToFirebase(async () => {
       const { FirebaseService } = await import('./firebase');
       await FirebaseService.saveInstructor(sanitized);
+      for (const courseToSync of updatedCoursesToSync) {
+        await FirebaseService.saveCourse(courseToSync);
+      }
     });
+  },
+  addInstructorCourseGroup(instructorId: string, groupName: string): Instructor | undefined {
+    const clean = groupName.trim();
+    if (!clean) return undefined;
+    const inst = this.getInstructorById(instructorId);
+    if (!inst) return undefined;
+    const currentGroups = inst.courseGroups && inst.courseGroups.length > 0
+      ? inst.courseGroups
+      : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+    if (!currentGroups.some(g => g.toLowerCase() === clean.toLowerCase())) {
+      const updated: Instructor = {
+        ...inst,
+        courseGroups: [...currentGroups, clean]
+      };
+      this.updateInstructor(updated);
+      return updated;
+    }
+    return inst;
+  },
+  renameInstructorCourseGroup(instructorId: string, oldName: string, newName: string): Instructor | undefined {
+    const cleanNew = newName.trim();
+    if (!cleanNew) return undefined;
+    const inst = this.getInstructorById(instructorId);
+    if (!inst) return undefined;
+    const currentGroups = inst.courseGroups && inst.courseGroups.length > 0
+      ? inst.courseGroups
+      : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+    const nextGroups = currentGroups
+      .map(g => (g === oldName ? cleanNew : g))
+      .filter((g, idx, arr) => arr.findIndex(item => item.toLowerCase() === g.toLowerCase()) === idx);
+    const updated: Instructor = {
+      ...inst,
+      courseGroups: nextGroups.length > 0 ? nextGroups : ['KHÓA HỌC ONLINE MỞ QUÁN']
+    };
+    this.updateInstructor(updated, { [oldName]: cleanNew });
+    return updated;
+  },
+  deleteInstructorCourseGroup(instructorId: string, groupName: string): Instructor | undefined {
+    const inst = this.getInstructorById(instructorId);
+    if (!inst) return undefined;
+    const currentGroups = inst.courseGroups && inst.courseGroups.length > 0
+      ? inst.courseGroups
+      : ['KHÓA HỌC ONLINE MỞ QUÁN'];
+    if (currentGroups.length <= 1) return inst;
+    const remaining = currentGroups.filter(g => g !== groupName);
+    const updated: Instructor = {
+      ...inst,
+      courseGroups: remaining.length > 0 ? remaining : ['KHÓA HỌC ONLINE MỞ QUÁN']
+    };
+    this.updateInstructor(updated);
+    return updated;
   },
   moveInstructor(id: string, direction: 'up' | 'down' | 'top'): Instructor[] {
     const list = [...this.getInstructors()];
@@ -241,13 +356,27 @@ export const StorageService = {
       list[index + 1] = temp;
     }
 
-    safeSet(KEYS.INSTRUCTORS, list);
-    window.dispatchEvent(new Event('storage_data_updated'));
-    return list;
+    const orderedList = list.map((inst, idx) => ({ ...inst, sortOrder: idx }));
+    safeSet(KEYS.INSTRUCTORS, orderedList);
+
+    syncToFirebase(async () => {
+      const { FirebaseService } = await import('./firebase');
+      for (const inst of orderedList) {
+        await FirebaseService.saveInstructor(inst);
+      }
+    });
+    return orderedList;
   },
   reorderInstructors(newList: Instructor[]): void {
-    safeSet(KEYS.INSTRUCTORS, newList);
-    window.dispatchEvent(new Event('storage_data_updated'));
+    const orderedList = newList.map((inst, idx) => ({ ...inst, sortOrder: idx }));
+    safeSet(KEYS.INSTRUCTORS, orderedList);
+
+    syncToFirebase(async () => {
+      const { FirebaseService } = await import('./firebase');
+      for (const inst of orderedList) {
+        await FirebaseService.saveInstructor(inst);
+      }
+    });
   },
   deleteInstructor(id: string): { chefName: string; deletedCoursesCount: number } {
     const instructors = this.getInstructors();
@@ -308,14 +437,23 @@ export const StorageService = {
   },
   updateCourseTransferSyntax(courseId: string, syntax: string): void {
     const cleanSyntax = syntax.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let updatedCourse: Course | undefined;
     const list = this.getCourses().map(c => {
       if (c.id === courseId) {
-        return { ...c, transferSyntax: cleanSyntax };
+        updatedCourse = { ...c, transferSyntax: cleanSyntax };
+        return updatedCourse;
       }
       return c;
     });
     safeSet(KEYS.COURSES, list);
-    window.dispatchEvent(new Event('storage_data_updated'));
+
+    if (updatedCourse) {
+      const target = updatedCourse;
+      syncToFirebase(async () => {
+        const { FirebaseService } = await import('./firebase');
+        await FirebaseService.saveCourse(target);
+      });
+    }
   },
   setCoursesFromRemote(courses: Course[]): void {
     if (courses && courses.length > 0) {
@@ -346,19 +484,23 @@ export const StorageService = {
     safeSet(KEYS.COURSES, list);
     
     // Update instructor courseCount
+    let updatedInst: Instructor | undefined;
     const instructors = this.getInstructors().map(inst => {
       if (inst.id === course.instructorId) {
-        return { ...inst, courseCount: (inst.courseCount || 0) + 1 };
+        updatedInst = { ...inst, courseCount: (inst.courseCount || 0) + 1 };
+        return updatedInst;
       }
       return inst;
     });
     safeSet(KEYS.INSTRUCTORS, instructors);
-    window.dispatchEvent(new Event('storage_data_updated'));
 
     // Sync to Firestore
     syncToFirebase(async () => {
       const { FirebaseService } = await import('./firebase');
       await FirebaseService.saveCourse(sanitized);
+      if (updatedInst) {
+        await FirebaseService.saveInstructor(updatedInst);
+      }
     });
   },
   updateCourse(course: Course): void {
@@ -374,7 +516,6 @@ export const StorageService = {
     };
     const list = this.getCourses().map(c => c.id === course.id ? sanitized : c);
     safeSet(KEYS.COURSES, list);
-    window.dispatchEvent(new Event('storage_data_updated'));
 
     // Sync to Firestore
     syncToFirebase(async () => {
@@ -388,21 +529,25 @@ export const StorageService = {
     const updatedCourses = allCourses.filter(c => c.id !== id);
     safeSet(KEYS.COURSES, updatedCourses);
 
+    let updatedInst: Instructor | undefined;
     if (targetCourse) {
       const instructors = this.getInstructors().map(inst => {
         if (inst.id === targetCourse.instructorId) {
-          return { ...inst, courseCount: Math.max(0, (inst.courseCount || 1) - 1) };
+          updatedInst = { ...inst, courseCount: Math.max(0, (inst.courseCount || 1) - 1) };
+          return updatedInst;
         }
         return inst;
       });
       safeSet(KEYS.INSTRUCTORS, instructors);
     }
-    window.dispatchEvent(new Event('storage_data_updated'));
 
     // Delete course document on Firestore
     syncToFirebase(async () => {
       const { FirebaseService } = await import('./firebase');
       await FirebaseService.deleteCourse(id);
+      if (updatedInst) {
+        await FirebaseService.saveInstructor(updatedInst);
+      }
     });
   },
 
@@ -786,6 +931,14 @@ export const StorageService = {
   getStudentEnrollments(studentId: string): Enrollment[] {
     return this.getEnrollments().filter(e => e.studentId === studentId);
   },
+  setEnrollmentsFromRemote(remoteEnrollments: Enrollment[]): void {
+    if (!remoteEnrollments || remoteEnrollments.length === 0) return;
+    const current = this.getEnrollments();
+    const map = new Map<string, Enrollment>();
+    current.forEach(e => map.set(e.id, e));
+    remoteEnrollments.forEach(e => map.set(e.id, e));
+    safeSet(KEYS.ENROLLMENTS, Array.from(map.values()));
+  },
   enrollStudent(params: {
     studentId: string;
     courseId: string;
@@ -811,7 +964,12 @@ export const StorageService = {
         enrollments[existingIndex].status = 'active';
         enrollments[existingIndex].trialExpiresAt = undefined;
         safeSet(KEYS.ENROLLMENTS, enrollments);
-        return enrollments[existingIndex];
+        const upgraded = enrollments[existingIndex];
+        syncToFirebase(async () => {
+          const { FirebaseService } = await import('./firebase');
+          await FirebaseService.saveEnrollment(upgraded);
+        });
+        return upgraded;
       }
       return enrollments[existingIndex];
     }
@@ -836,13 +994,23 @@ export const StorageService = {
     safeSet(KEYS.ENROLLMENTS, enrollments);
 
     // Update course studentCount
+    let updatedCourse: Course | undefined;
     const courses = this.getCourses().map(c => {
       if (c.id === course.id) {
-        return { ...c, studentCount: (c.studentCount || 0) + 1 };
+        updatedCourse = { ...c, studentCount: (c.studentCount || 0) + 1 };
+        return updatedCourse;
       }
       return c;
     });
     safeSet(KEYS.COURSES, courses);
+
+    syncToFirebase(async () => {
+      const { FirebaseService } = await import('./firebase');
+      await FirebaseService.saveEnrollment(newEnrollment);
+      if (updatedCourse) {
+        await FirebaseService.saveCourse(updatedCourse);
+      }
+    });
 
     return newEnrollment;
   },
@@ -860,6 +1028,10 @@ export const StorageService = {
       enr.lastLessonId = lessonId;
       enr.lastActiveAt = 'Vừa xong';
       safeSet(KEYS.ENROLLMENTS, enrollments);
+      syncToFirebase(async () => {
+        const { FirebaseService } = await import('./firebase');
+        await FirebaseService.saveEnrollment(enr);
+      });
     }
   },
 
@@ -908,6 +1080,7 @@ export const StorageService = {
   },
   saveFirebaseConfig(config: FirebaseConfigState): void {
     safeSet(KEYS.FIREBASE_CONFIG, config);
+    window.dispatchEvent(new Event('firebase_config_updated'));
   },
 
   // Homepage & Landing Page Display Config
@@ -955,6 +1128,11 @@ export const StorageService = {
     };
   },
 
+  setHomepageConfigFromRemote(config: HomepageConfig): void {
+    safeSet(KEYS.HOMEPAGE_CONFIG, config);
+    window.dispatchEvent(new Event('homepage_config_updated'));
+  },
+
   saveHomepageConfig(config: HomepageConfig): void {
     safeSet(KEYS.HOMEPAGE_CONFIG, config);
     window.dispatchEvent(new Event('homepage_config_updated'));
@@ -977,6 +1155,7 @@ export const StorageService = {
   // Reset
   resetDefaults(): void {
     localStorage.clear();
+    DevPersistence.clear();
     safeSet(KEYS.INSTRUCTORS, INITIAL_INSTRUCTORS);
     safeSet(KEYS.COURSES, INITIAL_COURSES);
     safeSet(KEYS.STUDENTS, INITIAL_STUDENTS);
@@ -984,5 +1163,7 @@ export const StorageService = {
     safeSet(KEYS.QUESTIONS, INITIAL_QUESTIONS);
     safeSet(KEYS.CURRENT_USER, INITIAL_STUDENTS[0]);
     window.dispatchEvent(new Event('storage_data_updated'));
+    window.dispatchEvent(new Event('homepage_config_updated'));
+    window.dispatchEvent(new Event('payment_config_updated'));
   }
 };
