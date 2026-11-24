@@ -5,18 +5,21 @@ import { StorageService } from '../services/storage';
 
 interface FooterProps {
   onNavigate: (view: string, params?: Record<string, unknown>) => void;
+  homepageConfig?: HomepageConfig;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
-  const [homeConfig, setHomeConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
+export const Footer: React.FC<FooterProps> = ({ onNavigate, homepageConfig }) => {
+  const [localHomeConfig, setLocalHomeConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
 
   useEffect(() => {
     const handleUpdate = () => {
-      setHomeConfig(StorageService.getHomepageConfig());
+      setLocalHomeConfig(StorageService.getHomepageConfig());
     };
     window.addEventListener('homepage_config_updated', handleUpdate);
     return () => window.removeEventListener('homepage_config_updated', handleUpdate);
   }, []);
+
+  const homeConfig = homepageConfig || localHomeConfig;
 
   const { footer } = homeConfig;
 

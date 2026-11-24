@@ -23,6 +23,7 @@ interface HomePageProps {
   onOpenCart?: () => void;
   onNavigate: (view: string, params?: Record<string, unknown>) => void;
   onQuickTrialSubmit: (data: { name: string; contact: string; field: string }) => void;
+  homepageConfig?: HomepageConfig;
 }
 
 const CourseCardThumbnail: React.FC<{ src: string; alt: string }> = ({ src, alt }) => {
@@ -58,23 +59,26 @@ export const HomePage: React.FC<HomePageProps> = ({
   onAddToCart,
   onOpenCart,
   onNavigate,
-  onQuickTrialSubmit
+  onQuickTrialSubmit,
+  homepageConfig
 }) => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [trialName, setTrialName] = useState('');
   const [trialContact, setTrialContact] = useState('');
   const [trialField, setTrialField] = useState('Món Việt truyền thống & Mở quán');
   const [trialSuccessMsg, setTrialSuccessMsg] = useState(false);
-  const [homeConfig, setHomeConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
+  const [localHomeConfig, setLocalHomeConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
   const [visibleLimits, setVisibleLimits] = useState<Record<string, number>>({});
 
   React.useEffect(() => {
     const handleUpdate = () => {
-      setHomeConfig(StorageService.getHomepageConfig());
+      setLocalHomeConfig(StorageService.getHomepageConfig());
     };
     window.addEventListener('homepage_config_updated', handleUpdate);
     return () => window.removeEventListener('homepage_config_updated', handleUpdate);
   }, []);
+
+  const homeConfig = homepageConfig || localHomeConfig;
 
   // Active featured chef in Hero section
   const [selectedHeroChefId, setSelectedHeroChefId] = useState<string>(

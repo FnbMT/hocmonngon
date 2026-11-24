@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { HomepageConfig, FaqItem, FooterLinkItem } from '../types';
 import { StorageService, DEFAULT_HOMEPAGE_CONFIG } from '../services/storage';
+import { FirebaseService } from '../services/firebase';
 
 interface AdminHomepageSettingsProps {
   onNavigateHome?: () => void;
@@ -261,26 +262,48 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
   const [savedSection, setSavedSection] = useState<string | null>(null);
   const [floatingToast, setFloatingToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
 
-  const triggerSaveSection = (sectionKey: string, customMessage?: string) => {
+  const triggerSaveSection = async (sectionKey: string, customMessage?: string) => {
     setSavingSection(sectionKey);
     skipNextRemoteSyncRef.current = true;
     StorageService.saveHomepageConfig(config);
 
-    setTimeout(() => {
+    const isFbConfigured = FirebaseService.isConfigured();
+    if (!isFbConfigured) {
       setSavingSection(null);
       setSavedSection(sectionKey);
-      const msg = customMessage || 'Đã lưu thành công & Đồng bộ Firestore!';
-      setFloatingToast({ message: msg, type: 'success' });
-      showToast(msg);
+      const warnMsg = '⚠️ Cài đặt đã lưu trên máy này! Tuy nhiên Firebase chưa được kết nối nên CHƯA hiển thị trên Vercel. Hãy sang tab "6. Cấu Hình Firebase Storage" để kết nối đám mây!';
+      setFloatingToast({ message: warnMsg, type: 'error' });
+      showToast(warnMsg);
+      return;
+    }
 
-      setTimeout(() => {
-        setSavedSection((curr) => (curr === sectionKey ? null : curr));
-      }, 4000);
+    try {
+      const ok = await FirebaseService.syncHomepageConfigToFirebase(config);
+      setSavingSection(null);
+      setSavedSection(sectionKey);
+      if (ok) {
+        const msg = customMessage || '🎉 Đã lưu và đồng bộ tức thì lên Cloud Firestore!';
+        setFloatingToast({ message: msg, type: 'success' });
+        showToast(msg);
+      } else {
+        const errMsg = '❌ Lỗi: Không thể lưu lên Firestore! Vui lòng kiểm tra lại Rules trên Firebase Console hoặc tab Cấu hình Firebase.';
+        setFloatingToast({ message: errMsg, type: 'error' });
+        showToast(errMsg);
+      }
+    } catch (err: any) {
+      setSavingSection(null);
+      const errMsg = `❌ Lỗi đồng bộ Firestore: ${err?.message || err}`;
+      setFloatingToast({ message: errMsg, type: 'error' });
+      showToast(errMsg);
+    }
 
-      setTimeout(() => {
-        setFloatingToast(null);
-      }, 3500);
-    }, 300);
+    setTimeout(() => {
+      setSavedSection((curr) => (curr === sectionKey ? null : curr));
+    }, 4000);
+
+    setTimeout(() => {
+      setFloatingToast(null);
+    }, 4000);
   };
 
   // Handle Save
@@ -479,6 +502,33 @@ export const AdminHomepageSettings: React.FC<AdminHomepageSettingsProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Cloud Status Banner */}
+      {!FirebaseService.isConfigured() ? (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <p className="font-extrabold text-amber-900">
+                Chế độ Offline-First: Firebase Firestore chưa được kết nối!
+              </p>
+              <p className="text-amber-800 text-[11px] mt-0.5">
+                Các thay đổi giao diện trang chủ ở đây hiện chỉ lưu tạm trên trình duyệt này và CHƯA được hiển thị cho học viên trên Vercel. Vui lòng vào tab <strong>"6. Cấu Hình Firebase Storage"</strong> để kết nối đám mây.
+              </p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-amber-200 text-amber-900 font-bold rounded-lg text-[11px] shrink-0">
+            Chưa kết nối Cloud
+          </span>
+        </div>
+      ) : (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs text-emerald-900 animate-in fade-in">
+          <div className="flex items-center gap-2 font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Cloud Firestore đã kết nối sẵn sàng: Thay đổi trang chủ sẽ tự động đồng bộ tức thì đến toàn bộ người dùng trên Vercel!</span>
+          </div>
+        </div>
+      )}
 
       {/* Sub Tabs Navigation */}
       <div className="flex border-b border-stone-200 gap-2 overflow-x-auto text-xs font-bold bg-white p-2 rounded-2xl shadow-xs">

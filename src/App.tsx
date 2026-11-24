@@ -3,7 +3,7 @@ import { StorageService } from './services/storage';
 import { FirebaseService } from './services/firebase';
 import { PaymentService } from './services/paymentService';
 import { DevPersistence } from './services/devPersistence';
-import { Course, Instructor, Student, Enrollment, ChefQuestion } from './types';
+import { Course, Instructor, Student, Enrollment, ChefQuestion, HomepageConfig } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HomePage } from './components/HomePage';
@@ -61,6 +61,7 @@ export default function App() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>(StorageService.getEnrollments());
   const [currentUser, setCurrentUser] = useState<Student | null>(StorageService.getCurrentUser());
   const [questions, setQuestions] = useState<ChefQuestion[]>(StorageService.getQuestions());
+  const [homepageConfig, setHomepageConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
 
   const initialNav = getInitialNavState();
 
@@ -106,6 +107,7 @@ export default function App() {
     setEnrollments(StorageService.getEnrollments());
     setCurrentUser(StorageService.getCurrentUser());
     setQuestions(StorageService.getQuestions());
+    setHomepageConfig(StorageService.getHomepageConfig());
   }, []);
 
   const showToast = useCallback((msg: string) => {
@@ -135,11 +137,15 @@ export default function App() {
     const handleStorageChange = () => {
       reloadData();
     };
+    const handleHomepageConfigChange = () => {
+      setHomepageConfig(StorageService.getHomepageConfig());
+    };
     const handleQuotaExceeded = () => {
       showToast('Bộ nhớ trình duyệt gần đầy. Hãy tải ảnh qua Firebase Storage hoặc nén nhỏ hơn!');
     };
 
     window.addEventListener('storage_data_updated', handleStorageChange);
+    window.addEventListener('homepage_config_updated', handleHomepageConfigChange);
     window.addEventListener('storage_quota_exceeded', handleQuotaExceeded);
 
     const startRealtimeSync = async () => {
@@ -167,6 +173,7 @@ export default function App() {
           }
           if (remoteData.homepageConfig) {
             StorageService.setHomepageConfigFromRemote(remoteData.homepageConfig);
+            setHomepageConfig(remoteData.homepageConfig);
           }
           if (remoteData.bankConfig) {
             PaymentService.setBankConfigFromRemote(remoteData.bankConfig);
@@ -189,6 +196,7 @@ export default function App() {
       unsubscribeRealtime = FirebaseService.subscribeToRealtimeUpdates({
         onHomepageConfig: (cfg) => {
           StorageService.setHomepageConfigFromRemote(cfg);
+          setHomepageConfig(cfg);
         },
         onPaymentConfig: ({ bankConfig, sepayConfig }) => {
           if (bankConfig) PaymentService.setBankConfigFromRemote(bankConfig);
@@ -222,6 +230,7 @@ export default function App() {
     return () => {
       isMounted = false;
       window.removeEventListener('storage_data_updated', handleStorageChange);
+      window.removeEventListener('homepage_config_updated', handleHomepageConfigChange);
       window.removeEventListener('storage_quota_exceeded', handleQuotaExceeded);
       window.removeEventListener('firebase_config_updated', handleFirebaseConfigUpdated);
       if (unsubscribeRealtime) {
@@ -645,6 +654,7 @@ export default function App() {
           onLogout={handleLogout}
           cartCount={cartCourses.length}
           onOpenCart={() => setIsCartOpen(true)}
+          homepageConfig={homepageConfig}
         />
       )}
 
@@ -663,6 +673,7 @@ export default function App() {
               onOpenCart={() => setIsCartOpen(true)}
               onNavigate={handleNavigate}
               onQuickTrialSubmit={handleQuickTrialSubmit}
+              homepageConfig={homepageConfig}
             />
           )}
 
@@ -772,7 +783,7 @@ export default function App() {
 
       {/* Main Footer (Ẩn trong phòng học) */}
       {currentView !== 'classroom' && (
-        <Footer onNavigate={handleNavigate} />
+        <Footer onNavigate={handleNavigate} homepageConfig={homepageConfig} />
       )}
 
       {/* Auth Modal */}

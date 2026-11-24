@@ -25,6 +25,7 @@ interface HeaderProps {
   onLogout: () => void;
   cartCount?: number;
   onOpenCart?: () => void;
+  homepageConfig?: HomepageConfig;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -34,20 +35,23 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
   onLogout,
   cartCount = 0,
-  onOpenCart
+  onOpenCart,
+  homepageConfig
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [homeConfig, setHomeConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
+  const [localHomeConfig, setLocalHomeConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
 
   React.useEffect(() => {
     const handleUpdate = () => {
-      setHomeConfig(StorageService.getHomepageConfig());
+      setLocalHomeConfig(StorageService.getHomepageConfig());
     };
     window.addEventListener('homepage_config_updated', handleUpdate);
     return () => window.removeEventListener('homepage_config_updated', handleUpdate);
   }, []);
+
+  const homeConfig = homepageConfig || localHomeConfig;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
