@@ -87,6 +87,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const currentInstructorId = currentUser?.instructorId;
   const currentInstructorProfile = instructors.find(i => i.id === currentInstructorId);
 
+  // Local state for immediate reactive UI updates for instructors
+  const [localInstructors, setLocalInstructors] = useState<Instructor[]>(instructors);
+  useEffect(() => {
+    setLocalInstructors(instructors);
+  }, [instructors]);
+
+  // Valid Enrollments: strictly only count enrollments for existing students and existing courses
+  const validEnrollments = useMemo(() => {
+    const studentIdSet = new Set(students.map(s => s.id));
+    const courseIdSet = new Set(courses.map(c => c.id));
+    return enrollments.filter(e => studentIdSet.has(e.studentId) && courseIdSet.has(e.courseId));
+  }, [enrollments, students, courses]);
+
   // Scoped lists: If instructor, strictly isolate to their own courses, enrollments, students and revenue
   const scopedCourses = useMemo(() => {
     if (isInstructor && currentInstructorId) {
@@ -98,18 +111,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const scopedEnrollments = useMemo(() => {
     if (isInstructor) {
       const courseIds = new Set(scopedCourses.map(c => c.id));
-      return enrollments.filter(e => courseIds.has(e.courseId));
+      return validEnrollments.filter(e => courseIds.has(e.courseId));
     }
-    return enrollments;
-  }, [enrollments, scopedCourses, isInstructor]);
+    return validEnrollments;
+  }, [validEnrollments, scopedCourses, isInstructor]);
 
   const scopedStudents = useMemo(() => {
     if (isInstructor) {
-      const studentIds = new Set(scopedEnrollments.map(e => e.studentId));
-      return students.filter(s => studentIds.has(s.id));
+      const studentIdsInMyCourses = new Set(scopedEnrollments.map(e => e.studentId));
+      return students.filter(s => studentIdsInMyCourses.has(s.id));
     }
     return students;
   }, [students, scopedEnrollments, isInstructor]);
+
+  // Distinct students who bought paid courses
+  const paidStudentIds = useMemo(() => {
+    return new Set(validEnrollments.filter(e => e.type === 'paid').map(e => e.studentId));
+  }, [validEnrollments]);
+
+  // Distinct students currently taking trial (and not yet paid)
+  const trialStudentIds = useMemo(() => {
+    return new Set(
+      validEnrollments
+        .filter(e => e.type === 'trial' && !paidStudentIds.has(e.studentId))
+        .map(e => e.studentId)
+    );
+  }, [validEnrollments, paidStudentIds]);
+
+  // For Instructor: distinct paid students & trial students
+  const scopedPaidStudentIds = useMemo(() => {
+    return new Set(scopedEnrollments.filter(e => e.type === 'paid').map(e => e.studentId));
+  }, [scopedEnrollments]);
+
+  const scopedTrialStudentIds = useMemo(() => {
+    return new Set(
+      scopedEnrollments
+        .filter(e => e.type === 'trial' && !scopedPaidStudentIds.has(e.studentId))
+        .map(e => e.studentId)
+    );
+  }, [scopedEnrollments, scopedPaidStudentIds]);
+
+  // Revenue: Sum of pricePaid from valid paid enrollments
+  const totalRevenue = useMemo(() => {
+    return validEnrollments
+      .filter(e => e.type === 'paid')
+      .reduce((sum, e) => sum + (e.pricePaid || 0), 0);
+  }, [validEnrollments]);
 
   const scopedRevenue = useMemo(() => {
     return scopedEnrollments
@@ -549,6 +596,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const chefId = chefToDelete.id;
     const chefName = chefToDelete.name;
 
+    // Immediately update local UI so instructor card vanishes instantly
+    setLocalInstructors(prev => prev.filter(i => i.id !== chefId));
+
     const result = StorageService.deleteInstructor(chefId);
 
     // If currently selected course belonged to this instructor, reset selection
@@ -587,8 +637,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Reorder Instructor Handler
   const handleMoveInstructor = (id: string, direction: 'up' | 'down' | 'top') => {
-    const chef = instructors.find(i => i.id === id);
-    StorageService.moveInstructor(id, direction);
+    const chef = localInstructors.find(i => i.id === id);
+    const updated = StorageService.moveInstructor(id, direction);
+    setLocalInstructors(updated);
     onRefreshData();
     if (direction === 'top') {
       setActionAlert({
@@ -641,11 +692,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (e.target) e.target.value = '';
     }
   };
-
-  // Overall Stats
-  const totalRevenue = enrollments
-    .filter(e => e.type === 'paid')
-    .reduce((sum, e) => sum + (e.pricePaid || 0), 0);
 
   const formatPrice = (p: number) => new Intl.NumberFormat('vi-VN').format(p) + 'đ';
 
@@ -1855,7 +1901,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {isInstructor ? scopedStudents.length : students.length}
             </p>
             <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> {isInstructor ? 'Chỉ tính học viên của bạn' : '+100% tự động kích hoạt'}
+              <TrendingUp className="w-3 h-3" /> {isInstructor ? 'Chỉ tính học viên các khóa của bạn' : '+100% tự động kích hoạt'}
             </p>
           </div>
 
@@ -1864,14 +1910,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {isInstructor ? 'Học viên đã mua khóa của tôi' : 'Học viên đã mua khóa học'}
             </p>
             <p className="text-3xl font-black text-red-700">
-              {isInstructor 
-                ? scopedEnrollments.filter(e => e.type === 'paid').length 
-                : enrollments.filter(e => e.type === 'paid').length}
+              {isInstructor ? scopedPaidStudentIds.size : paidStudentIds.size}
             </p>
             <p className="text-[11px] text-stone-500">
               {isInstructor 
-                ? `${scopedEnrollments.filter(e => e.type === 'trial').length} học viên đang học thử khóa của bạn`
-                : `${enrollments.filter(e => e.type === 'trial').length} học viên đang học thử`}
+                ? (scopedTrialStudentIds.size > 0
+                    ? `${scopedTrialStudentIds.size} học viên đang học thử (${scopedEnrollments.filter(e => e.type === 'paid').length} lượt mua)`
+                    : `${scopedEnrollments.filter(e => e.type === 'paid').length} lượt mua khóa học`)
+                : (trialStudentIds.size > 0
+                    ? `${trialStudentIds.size} học viên đang học thử (${validEnrollments.filter(e => e.type === 'paid').length} lượt mua)`
+                    : `${validEnrollments.filter(e => e.type === 'paid').length} lượt mua khóa học`)}
             </p>
           </div>
 
@@ -1892,12 +1940,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {isInstructor ? 'Khóa học của tôi' : 'Giảng viên / Khóa học'}
             </p>
             <p className="text-3xl font-black text-stone-900">
-              {isInstructor ? `${scopedCourses.length} Khóa học` : `${instructors.length} / ${courses.length}`}
+              {isInstructor ? `${scopedCourses.length} Khóa học` : `${localInstructors.length} / ${courses.length}`}
             </p>
             <p className="text-[11px] text-stone-500">
               {isInstructor 
                 ? `${scopedCourses.reduce((sum, c) => sum + c.chapters.reduce((ls, ch) => ls + ch.lessons.length, 0), 0)} bài giảng video`
-                : `${instructors.reduce((sum, i) => sum + (i.courseGroups?.length || 1), 0)} nhóm khóa học`}
+                : `${localInstructors.reduce((sum, i) => sum + (i.courseGroups?.length || 1), 0)} nhóm khóa học`}
             </p>
           </div>
         </div>
@@ -1928,7 +1976,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               }`}
             >
               <ChefHat className="w-4 h-4" />
-              <span>2. Quản Lý Giảng Viên ({instructors.length})</span>
+              <span>2. Quản Lý Giảng Viên ({localInstructors.length})</span>
             </button>
           )}
 
@@ -2073,7 +2121,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </tr>
                     ) : (
                       filteredStudents.map((student) => {
-                        const studentEnrollments = enrollments.filter(e => e.studentId === student.id);
+                        const studentEnrollments = scopedEnrollments.filter(e => e.studentId === student.id);
                         const paidEnrollments = studentEnrollments.filter(e => e.type === 'paid');
                         const trialEnrollments = studentEnrollments.filter(e => e.type === 'trial');
                         const totalSpent = paidEnrollments.reduce((sum, e) => sum + (e.pricePaid || 0), 0);
@@ -2417,7 +2465,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {instructors.map((chef, index) => {
+              {localInstructors.map((chef, index) => {
                 const chefGroups = (chef.courseGroups && chef.courseGroups.length > 0)
                   ? chef.courseGroups
                   : ['KHÓA HỌC ONLINE MỞ QUÁN'];
@@ -2467,10 +2515,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                       <button
                         type="button"
-                        disabled={index === instructors.length - 1}
+                        disabled={index === localInstructors.length - 1}
                         onClick={() => handleMoveInstructor(chef.id, 'down')}
                         className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
-                          index === instructors.length - 1
+                          index === localInstructors.length - 1
                             ? 'opacity-30 cursor-not-allowed text-stone-300 bg-stone-50'
                             : 'bg-stone-100 hover:bg-stone-200 text-stone-700 cursor-pointer'
                         }`}

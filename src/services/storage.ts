@@ -390,12 +390,23 @@ export const StorageService = {
     // 2. Cascade delete all courses belonging to this instructor locally
     const allCourses = this.getCourses();
     const coursesToDelete = allCourses.filter(c => c.instructorId === id);
+    const courseIdsToDelete = new Set(coursesToDelete.map(c => c.id));
     const updatedCourses = allCourses.filter(c => c.instructorId !== id);
     safeSet(KEYS.COURSES, updatedCourses);
 
+    // 3. Cascade delete all enrollments belonging to the deleted courses locally
+    if (courseIdsToDelete.size > 0) {
+      const allEnrollments = this.getEnrollments();
+      const updatedEnrollments = allEnrollments.filter(e => !courseIdsToDelete.has(e.courseId));
+      safeSet(KEYS.ENROLLMENTS, updatedEnrollments);
+    }
+
+    // 4. Update DevPersistence disk state immediately so it never restores deleted instructor
+    DevPersistence.saveImmediate();
+
     window.dispatchEvent(new Event('storage_data_updated'));
 
-    // 3. Delete instructor document & cascade delete all their courses on Firestore
+    // 5. Delete instructor document & cascade delete all their courses & enrollments on Firestore
     syncToFirebase(async () => {
       const { FirebaseService } = await import('./firebase');
       await FirebaseService.deleteInstructor(id);
@@ -529,6 +540,13 @@ export const StorageService = {
     const updatedCourses = allCourses.filter(c => c.id !== id);
     safeSet(KEYS.COURSES, updatedCourses);
 
+    // Cascade delete enrollments belonging to this course
+    const allEnrollments = this.getEnrollments();
+    const updatedEnrollments = allEnrollments.filter(e => e.courseId !== id);
+    if (updatedEnrollments.length !== allEnrollments.length) {
+      safeSet(KEYS.ENROLLMENTS, updatedEnrollments);
+    }
+
     let updatedInst: Instructor | undefined;
     if (targetCourse) {
       const instructors = this.getInstructors().map(inst => {
@@ -540,6 +558,9 @@ export const StorageService = {
       });
       safeSet(KEYS.INSTRUCTORS, instructors);
     }
+
+    DevPersistence.saveImmediate();
+    window.dispatchEvent(new Event('storage_data_updated'));
 
     // Delete course document on Firestore
     syncToFirebase(async () => {
@@ -780,15 +801,28 @@ export const StorageService = {
     const students = this.getStudents();
     const student = students.find(s => s.id === id);
     const studentName = student?.name || 'Học viên';
+    const studentPhone = student?.phone ? student.phone.trim().replace(/[\s.-]/g, '') : '';
+    const studentEmail = student?.email ? student.email.trim().toLowerCase() : '';
 
     // 1. Remove student locally
     const updatedStudents = students.filter(s => s.id !== id);
     safeSet(KEYS.STUDENTS, updatedStudents);
 
-    // 2. Cascade delete all enrollments belonging to this student locally
+    const remainingStudentIds = new Set(updatedStudents.map(s => s.id));
+
+    // 2. Cascade delete all enrollments belonging to this student locally (matching id, email, or phone)
+    // Also prune any orphaned enrollments whose studentId no longer exists in updatedStudents
     const allEnrollments = this.getEnrollments();
-    const enrollmentsToDelete = allEnrollments.filter(e => e.studentId === id);
-    const updatedEnrollments = allEnrollments.filter(e => e.studentId !== id);
+    const enrollmentsToDelete = allEnrollments.filter(e => {
+      if (e.studentId === id) return true;
+      if (studentEmail && (e.studentId.toLowerCase() === studentEmail || e.studentEmail?.toLowerCase() === studentEmail)) return true;
+      if (studentPhone && (e.studentId.replace(/[\s.-]/g, '') === studentPhone || e.studentPhone?.replace(/[\s.-]/g, '') === studentPhone)) return true;
+      // Prune orphan enrollments
+      if (!remainingStudentIds.has(e.studentId)) return true;
+      return false;
+    });
+    const idsToDelete = new Set(enrollmentsToDelete.map(e => e.id));
+    const updatedEnrollments = allEnrollments.filter(e => !idsToDelete.has(e.id));
     safeSet(KEYS.ENROLLMENTS, updatedEnrollments);
 
     // 3. Reset currentUser if they were deleted
@@ -801,9 +835,12 @@ export const StorageService = {
       }
     }
 
+    // 4. Update DevPersistence disk state immediately so it never restores deleted student
+    DevPersistence.saveImmediate();
+
     window.dispatchEvent(new Event('storage_data_updated'));
 
-    // 4. Cascade delete student and all their enrollments on Firestore
+    // 5. Cascade delete student and all their enrollments on Firestore
     syncToFirebase(async () => {
       const { FirebaseService } = await import('./firebase');
       await FirebaseService.deleteStudent(id);

@@ -110,6 +110,8 @@ export interface Student {
 export interface Enrollment {
   id: string;
   studentId: string;
+  studentEmail?: string;
+  studentPhone?: string;
   courseId: string;
   courseTitle: string;
   instructorName: string;

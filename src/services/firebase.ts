@@ -129,17 +129,32 @@ export const FirebaseService = {
       const db = this.getDb();
       if (!db) return { success: false, deletedCourses: 0 };
 
-      // 1. Delete instructor doc from Firestore
-      await deleteDoc(doc(db, 'instructors', instructorId));
+      // 1. Delete instructor doc from Firestore (direct doc ID)
+      await deleteDoc(doc(db, 'instructors', instructorId)).catch(() => {});
+
+      // Also delete by matching 'id' field if doc ID was different
+      try {
+        const qInst = query(collection(db, 'instructors'), where('id', '==', instructorId));
+        const snapInst = await getDocs(qInst);
+        if (!snapInst.empty) {
+          const bInst = writeBatch(db);
+          snapInst.forEach(d => bInst.delete(d.ref));
+          await bInst.commit();
+        }
+      } catch (err) {
+        console.warn('Error querying instructor doc by id in Firestore:', err);
+      }
 
       // 2. Cascade delete all courses belonging to this instructor in Firestore
       let deletedCoursesCount = 0;
+      const deletedCourseIds: string[] = [];
       try {
         const q = query(collection(db, 'courses'), where('instructorId', '==', instructorId));
         const courseSnap = await getDocs(q);
         const batch = writeBatch(db);
         courseSnap.forEach(d => {
           batch.delete(d.ref);
+          deletedCourseIds.push(d.id);
           deletedCoursesCount++;
         });
         if (deletedCoursesCount > 0) {
@@ -147,6 +162,23 @@ export const FirebaseService = {
         }
       } catch (err) {
         console.warn('Error cascade deleting courses from Firestore:', err);
+      }
+
+      // 3. Cascade delete all enrollments belonging to deleted courses
+      if (deletedCourseIds.length > 0) {
+        try {
+          for (const cId of deletedCourseIds) {
+            const qEnr = query(collection(db, 'enrollments'), where('courseId', '==', cId));
+            const enrSnap = await getDocs(qEnr);
+            if (!enrSnap.empty) {
+              const bEnr = writeBatch(db);
+              enrSnap.forEach(d => bEnr.delete(d.ref));
+              await bEnr.commit();
+            }
+          }
+        } catch (err) {
+          console.warn('Error cascade deleting enrollments for deleted courses in Firestore:', err);
+        }
       }
 
       return { success: true, deletedCourses: deletedCoursesCount };
@@ -179,7 +211,32 @@ export const FirebaseService = {
       if (!this.isConfigured()) return false;
       const db = this.getDb();
       if (!db) return false;
-      await deleteDoc(doc(db, 'courses', courseId));
+      await deleteDoc(doc(db, 'courses', courseId)).catch(() => {});
+      try {
+        const qCrs = query(collection(db, 'courses'), where('id', '==', courseId));
+        const snapCrs = await getDocs(qCrs);
+        if (!snapCrs.empty) {
+          const bCrs = writeBatch(db);
+          snapCrs.forEach(d => bCrs.delete(d.ref));
+          await bCrs.commit();
+        }
+      } catch (err) {
+        console.warn('Error querying course doc by id in Firestore:', err);
+      }
+
+      // Cascade delete enrollments for this course
+      try {
+        const qEnr = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
+        const enrSnap = await getDocs(qEnr);
+        if (!enrSnap.empty) {
+          const bEnr = writeBatch(db);
+          enrSnap.forEach(d => bEnr.delete(d.ref));
+          await bEnr.commit();
+        }
+      } catch (err) {
+        console.warn('Error cascade deleting enrollments for course from Firestore:', err);
+      }
+
       return true;
     } catch (e) {
       console.warn('Cannot delete course from Firestore:', e);
@@ -210,7 +267,18 @@ export const FirebaseService = {
       if (!this.isConfigured()) return false;
       const db = this.getDb();
       if (!db) return false;
-      await deleteDoc(doc(db, 'students', studentId));
+      await deleteDoc(doc(db, 'students', studentId)).catch(() => {});
+      try {
+        const qStd = query(collection(db, 'students'), where('id', '==', studentId));
+        const snapStd = await getDocs(qStd);
+        if (!snapStd.empty) {
+          const bStd = writeBatch(db);
+          snapStd.forEach(d => bStd.delete(d.ref));
+          await bStd.commit();
+        }
+      } catch (err) {
+        console.warn('Error querying student doc by id in Firestore:', err);
+      }
 
       // Cascade delete all enrollments belonging to this student in Firestore
       try {
@@ -364,23 +432,35 @@ export const FirebaseService = {
 
       const instructors: Instructor[] = [];
       if (instSnap && !instSnap.empty) {
-        instSnap.forEach(d => instructors.push(d.data() as Instructor));
+        instSnap.forEach(d => {
+          const item = d.data() as Instructor;
+          instructors.push({ ...item, id: item.id || d.id });
+        });
         instructors.sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER));
       }
 
       const courses: Course[] = [];
       if (courseSnap && !courseSnap.empty) {
-        courseSnap.forEach(d => courses.push(d.data() as Course));
+        courseSnap.forEach(d => {
+          const item = d.data() as Course;
+          courses.push({ ...item, id: item.id || d.id });
+        });
       }
 
       const students: Student[] = [];
       if (studentSnap && !studentSnap.empty) {
-        studentSnap.forEach(d => students.push(d.data() as Student));
+        studentSnap.forEach(d => {
+          const item = d.data() as Student;
+          students.push({ ...item, id: item.id || d.id });
+        });
       }
 
       const enrollments: Enrollment[] = [];
       if (enrollSnap && !enrollSnap.empty) {
-        enrollSnap.forEach(d => enrollments.push(d.data() as Enrollment));
+        enrollSnap.forEach(d => {
+          const item = d.data() as Enrollment;
+          enrollments.push({ ...item, id: item.id || d.id });
+        });
       }
 
       const homepageConfig = (hpSnap && hpSnap.exists()) ? (hpSnap.data() as HomepageConfig) : undefined;
@@ -457,9 +537,12 @@ export const FirebaseService = {
         onSnapshot(
           collection(db, 'instructors'),
           (snap) => {
-            if (!snap.empty && !snap.metadata.hasPendingWrites) {
+            if (!snap.metadata.hasPendingWrites) {
               const list: Instructor[] = [];
-              snap.forEach(d => list.push(d.data() as Instructor));
+              snap.forEach(d => {
+                const item = d.data() as Instructor;
+                list.push({ ...item, id: item.id || d.id });
+              });
               list.sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER));
               handlers.onInstructors?.(list);
             }
@@ -474,9 +557,12 @@ export const FirebaseService = {
         onSnapshot(
           collection(db, 'courses'),
           (snap) => {
-            if (!snap.empty && !snap.metadata.hasPendingWrites) {
+            if (!snap.metadata.hasPendingWrites) {
               const list: Course[] = [];
-              snap.forEach(d => list.push(d.data() as Course));
+              snap.forEach(d => {
+                const item = d.data() as Course;
+                list.push({ ...item, id: item.id || d.id });
+              });
               handlers.onCourses?.(list);
             }
           },

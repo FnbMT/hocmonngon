@@ -24,17 +24,17 @@ function collectLocalState(): Record<string, string> {
 export const DevPersistence = {
   scheduleSave(): void {
     if (!import.meta.env.DEV || typeof window === 'undefined') return;
+    const updatedAt = Date.now();
+    try {
+      localStorage.setItem(DEV_SYNC_META_KEY, String(updatedAt));
+    } catch {
+      // Ignore quota errors on meta timestamp
+    }
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       saveTimer = null;
       const state = collectLocalState();
       if (Object.keys(state).length === 0) return;
-      const updatedAt = Date.now();
-      try {
-        localStorage.setItem(DEV_SYNC_META_KEY, String(updatedAt));
-      } catch {
-        // Ignore quota errors on meta timestamp
-      }
       fetch('/api/dev-state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -42,7 +42,27 @@ export const DevPersistence = {
       }).catch(() => {
         // Silent fallback if dev endpoint unavailable
       });
-    }, 250);
+    }, 150);
+  },
+
+  saveImmediate(): void {
+    if (!import.meta.env.DEV || typeof window === 'undefined') return;
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    const state = collectLocalState();
+    const updatedAt = Date.now();
+    try {
+      localStorage.setItem(DEV_SYNC_META_KEY, String(updatedAt));
+    } catch {
+      // Ignore
+    }
+    fetch('/api/dev-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updatedAt, state })
+    }).catch(() => {});
   },
 
   async restoreIfNeeded(): Promise<boolean> {
