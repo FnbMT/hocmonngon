@@ -566,6 +566,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     });
   };
 
+  const [copiedRules, setCopiedRules] = useState(false);
+
+  const FIRESTORE_RULES_SNIPPET = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Khoa hoc
+    match /courses/{courseId} {
+      allow read, write: if true;
+    }
+    // 2. Giang vien
+    match /instructors/{instructorId} {
+      allow read, write: if true;
+    }
+    // 3. Cai dat Trang chu & Thanh toan
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
+    // 4. Hoc vien
+    match /students/{studentId} {
+      allow read, write: if true;
+    }
+    // 5. Don dang ky hoc
+    match /enrollments/{enrollmentId} {
+      allow read, write: if true;
+    }
+    // 6. Giao dich SePay (chi webhook duoc ghi)
+    match /transactions/{txId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}`;
+
+  const handleCopyFirestoreRules = () => {
+    navigator.clipboard.writeText(FIRESTORE_RULES_SNIPPET);
+    setCopiedRules(true);
+    setTimeout(() => setCopiedRules(false), 3000);
+    setActionAlert({
+      type: 'success',
+      message: 'Đã sao chép mã Quy tắc Firestore Rules vào bộ nhớ tạm!'
+    });
+  };
+
   // Sync selectedCourseForLessons when courses change (strictly scoped)
   useEffect(() => {
     if (selectedCourseForLessons) {
@@ -3808,6 +3851,85 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <p className="text-emerald-800">
                 Khi chưa điền key Firebase, hệ thống tự động lưu trữ đầy đủ trong localStorage trình duyệt để bạn trải nghiệm và test mọi tính năng mà không bị gián đoạn!
               </p>
+            </div>
+
+            {/* FIRESTORE SECURITY RULES HELPER (FIX MISSING OR INSUFFICIENT PERMISSIONS) */}
+            <div className="p-5 bg-gradient-to-br from-red-950 via-stone-900 to-stone-900 rounded-3xl text-white space-y-4 shadow-lg border border-red-800/80">
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-wider">
+                  <ShieldAlert className="w-3.5 h-3.5 text-white" />
+                  XỬ LÝ LỖI "MISSING OR INSUFFICIENT PERMISSIONS"
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                  Mở Quyền Ghi Trên Firebase Console (Firestore Security Rules)
+                </h3>
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  Khi Firebase báo lỗi <b>"Missing or insufficient permissions"</b>, đó là do Google Firestore mặc định khóa quyền ghi (Rules = false hoặc đã hết hạn dùng thử 30 ngày). Bạn chỉ cần copy đoạn mã Rules chuẩn dưới đây và dán vào tab <b>Rules</b> trên Firebase Console:
+                </p>
+              </div>
+
+              {/* 3 Step Guide Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-stone-200">
+                <div className="p-3.5 bg-stone-800/90 rounded-2xl border border-stone-700/80 space-y-1">
+                  <div className="font-black text-red-400 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-black">1</span>
+                    Vào Firebase Console
+                  </div>
+                  <p className="text-stone-300">
+                    Mở dự án Firebase của bạn → Vào menu bên trái chọn <b>Firestore Database</b> → Chọn tab <b>Rules (Quy tắc)</b>.
+                  </p>
+                </div>
+
+                <div className="p-3.5 bg-stone-800/90 rounded-2xl border border-stone-700/80 space-y-1">
+                  <div className="font-black text-red-400 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-black">2</span>
+                    Dán Mã Quy Tắc
+                  </div>
+                  <p className="text-stone-300">
+                    Bấm nút <b>"Sao chép mã Rules"</b> bên dưới, xóa toàn bộ nội dung cũ trong ô soạn thảo trên Firebase và dán mã mới vào.
+                  </p>
+                </div>
+
+                <div className="p-3.5 bg-stone-800/90 rounded-2xl border border-stone-700/80 space-y-1">
+                  <div className="font-black text-red-400 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-black">3</span>
+                    Xuất Bản (Publish)
+                  </div>
+                  <p className="text-stone-300">
+                    Bấm nút <b>Publish (Xuất bản)</b> màu xanh trên Firebase Console. Sau 5 giây, quay lại đây bấm <b>Đồng bộ toàn diện</b> là thành công 100%!
+                  </p>
+                </div>
+              </div>
+
+              {/* Code Snippet Box */}
+              <div className="bg-stone-950 p-3.5 rounded-2xl border border-stone-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-mono font-bold text-red-400 flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5 text-red-400" />
+                    <span>Mã Firestore Security Rules chuẩn:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyFirestoreRules}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition-all shadow-xs cursor-pointer active:scale-95"
+                  >
+                    {copiedRules ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-white" />
+                        <span>Đã Sao Chép!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-white" />
+                        <span>Sao Chép Mã Rules</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <pre className="text-[11px] font-mono text-emerald-400 overflow-x-auto p-2.5 bg-stone-900 rounded-xl max-h-48 whitespace-pre leading-relaxed">
+                  {FIRESTORE_RULES_SNIPPET}
+                </pre>
+              </div>
             </div>
 
             {/* VERCEL ENVIRONMENT VARIABLES HELPER (CRITICAL FOR LIVE VERCEL DEPLOYMENT) */}

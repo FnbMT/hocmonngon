@@ -672,7 +672,11 @@ export const FirebaseService = {
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      return { success: false, message: `Lỗi đồng bộ Firestore: ${message}`, details: '' };
+      const isPermissionErr = message.toLowerCase().includes('permission') || message.toLowerCase().includes('insufficient');
+      const hint = isPermissionErr 
+        ? ' (Nguyên nhân: Firestore Security Rules trên Firebase Console đang chặn quyền ghi. Vui lòng mở Tab Rules trên Firebase Console và dán quy tắc theo hướng dẫn bên dưới).'
+        : '';
+      return { success: false, message: `Lỗi đồng bộ Firestore: ${message}${hint}`, details: '' };
     }
   },
 
@@ -691,9 +695,27 @@ export const FirebaseService = {
       const studentCount = studentSnap ? studentSnap.docs.length : 0;
       const instCount = instSnap ? instSnap.docs.length : 0;
       const courseCount = courseSnap ? courseSnap.docs.length : 0;
+
+      // Verify write permission
+      let writeWarning = '';
+      try {
+        const testRef = doc(dbInstance, 'settings', '_ping_');
+        await setDoc(testRef, { lastPing: Date.now() }, { merge: true });
+        await deleteDoc(testRef).catch(() => {});
+      } catch (wErr: unknown) {
+        const wMsg = wErr instanceof Error ? wErr.message : String(wErr);
+        if (wMsg.toLowerCase().includes('permission') || wMsg.toLowerCase().includes('insufficient')) {
+          return {
+            success: false,
+            message: `⚠️ Kết nối đọc được nhưng BỊ CHẶN QUYỀN GHI (${wMsg}). Nguyên nhân: Firestore Security Rules trên Firebase Console đang khóa quyền ghi. Vui lòng cập nhật Rules theo hướng dẫn bên dưới!`
+          };
+        }
+        writeWarning = ` (Lưu ý: Không thể ghi thử: ${wMsg})`;
+      }
+
       return { 
         success: true, 
-        message: `Kết nối Firebase Firestore thành công! Tìm thấy: ${instCount} giảng viên, ${courseCount} khóa học, ${studentCount} học viên trên đám mây.` 
+        message: `Kết nối Firebase Firestore thành công (Cả Đọc & Ghi)! Tìm thấy: ${instCount} giảng viên, ${courseCount} khóa học, ${studentCount} học viên trên đám mây.${writeWarning}` 
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
