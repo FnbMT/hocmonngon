@@ -421,29 +421,51 @@ export const FirebaseService = {
       const db = this.getDb();
       if (!db) return null;
 
-      const [instSnap, courseSnap, studentSnap, enrollSnap, hpSnap, paySnap] = await Promise.all([
+      const [instSnap, courseSnap, studentSnap, enrollSnap, hpSnap, paySnap, tombSnap] = await Promise.all([
         getDocs(collection(db, 'instructors')).catch(() => null),
         getDocs(collection(db, 'courses')).catch(() => null),
         getDocs(collection(db, 'students')).catch(() => null),
         getDocs(collection(db, 'enrollments')).catch(() => null),
         getDoc(doc(db, 'settings', 'homepage')).catch(() => null),
-        getDoc(doc(db, 'settings', 'payment')).catch(() => null)
+        getDoc(doc(db, 'settings', 'payment')).catch(() => null),
+        getDoc(doc(db, 'settings', 'tombstones')).catch(() => null)
       ]);
 
+      if (tombSnap && tombSnap.exists()) {
+        const tombData = tombSnap.data();
+        if (Array.isArray(tombData.deletedInstructorIds)) {
+          tombData.deletedInstructorIds.forEach((id: string) => StorageService.addDeletedInstructorId(id));
+        }
+        if (Array.isArray(tombData.deletedCourseIds)) {
+          tombData.deletedCourseIds.forEach((id: string) => StorageService.addDeletedCourseId(id));
+        }
+        if (Array.isArray(tombData.deletedStudentIds)) {
+          tombData.deletedStudentIds.forEach((id: string) => StorageService.addDeletedStudentId(id));
+        }
+      }
+
+      const deletedInstIds = new Set(StorageService.getDeletedInstructorIds());
       const instructors: Instructor[] = [];
       if (instSnap && !instSnap.empty) {
         instSnap.forEach(d => {
           const item = d.data() as Instructor;
-          instructors.push({ ...item, id: item.id || d.id });
+          const instId = item.id || d.id;
+          if (!deletedInstIds.has(instId)) {
+            instructors.push({ ...item, id: instId });
+          }
         });
         instructors.sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER));
       }
 
+      const deletedCourseIds = new Set(StorageService.getDeletedCourseIds());
       const courses: Course[] = [];
       if (courseSnap && !courseSnap.empty) {
         courseSnap.forEach(d => {
           const item = d.data() as Course;
-          courses.push({ ...item, id: item.id || d.id });
+          const cId = item.id || d.id;
+          if (!deletedCourseIds.has(cId) && !deletedInstIds.has(item.instructorId)) {
+            courses.push({ ...item, id: cId });
+          }
         });
       }
 
@@ -493,6 +515,7 @@ export const FirebaseService = {
     onPaymentConfig?: (data: { bankConfig?: PaymentBankConfig; sepayConfig?: SePayConfig }) => void;
     onInstructors?: (instructors: Instructor[]) => void;
     onCourses?: (courses: Course[]) => void;
+    onTombstones?: () => void;
   }): () => void {
     if (!this.isConfigured()) return () => {};
     const db = this.getDb();
@@ -571,6 +594,30 @@ export const FirebaseService = {
       );
     }
 
+    if (handlers.onTombstones) {
+      unsubscribers.push(
+        onSnapshot(
+          doc(db, 'settings', 'tombstones'),
+          (snap) => {
+            if (snap.exists() && !snap.metadata.hasPendingWrites) {
+              const tombData = snap.data();
+              if (Array.isArray(tombData.deletedInstructorIds)) {
+                tombData.deletedInstructorIds.forEach((id: string) => StorageService.addDeletedInstructorId(id));
+              }
+              if (Array.isArray(tombData.deletedCourseIds)) {
+                tombData.deletedCourseIds.forEach((id: string) => StorageService.addDeletedCourseId(id));
+              }
+              if (Array.isArray(tombData.deletedStudentIds)) {
+                tombData.deletedStudentIds.forEach((id: string) => StorageService.addDeletedStudentId(id));
+              }
+              handlers.onTombstones?.();
+            }
+          },
+          (err) => console.warn('Realtime tombstones listener skipped:', err)
+        )
+      );
+    }
+
     return () => {
       unsubscribers.forEach(unsub => {
         try {
@@ -612,18 +659,47 @@ export const FirebaseService = {
       let studentCount = 0;
       let enrollCount = 0;
 
-      // 1. Sync Instructors (sanitized)
-      for (const inst of data.instructors) {
-        const cleanInst = sanitizeForFirestore(inst);
-        await setDoc(doc(db, 'instructors', inst.id), cleanInst, { merge: true });
-        instCount++;
+      // 1. Sync Instructors (sanitized) & Prune deleted/removed instructors from Firestore
+      const activeInstIds = new Set(data.instructors.map(i => i.id));
+      const deletedInstIds = new Set(StorageService.getDeletedInstructorIds());
+
+      const existingInstSnap = await getDocs(collection(db, 'instructors')).catch(() => null);
+      if (existingInstSnap && !existingInstSnap.empty) {
+        for (const docSnap of existingInstSnap.docs) {
+          if (!activeInstIds.has(docSnap.id) || deletedInstIds.has(docSnap.id)) {
+            await deleteDoc(docSnap.ref).catch(() => {});
+          }
+        }
       }
 
-      // 2. Sync Courses (sanitized)
+      for (const inst of data.instructors) {
+        if (!deletedInstIds.has(inst.id)) {
+          const cleanInst = sanitizeForFirestore(inst);
+          await setDoc(doc(db, 'instructors', inst.id), cleanInst, { merge: true });
+          instCount++;
+        }
+      }
+
+      // 2. Sync Courses (sanitized) & Prune deleted/removed courses from Firestore
+      const activeCourseIds = new Set(data.courses.map(c => c.id));
+      const deletedCourseIds = new Set(StorageService.getDeletedCourseIds());
+
+      const existingCourseSnap = await getDocs(collection(db, 'courses')).catch(() => null);
+      if (existingCourseSnap && !existingCourseSnap.empty) {
+        for (const docSnap of existingCourseSnap.docs) {
+          const courseData = docSnap.data();
+          if (!activeCourseIds.has(docSnap.id) || deletedCourseIds.has(docSnap.id) || deletedInstIds.has(courseData.instructorId)) {
+            await deleteDoc(docSnap.ref).catch(() => {});
+          }
+        }
+      }
+
       for (const course of data.courses) {
-        const cleanCourse = sanitizeForFirestore(course);
-        await setDoc(doc(db, 'courses', course.id), cleanCourse, { merge: true });
-        courseCount++;
+        if (!deletedCourseIds.has(course.id)) {
+          const cleanCourse = sanitizeForFirestore(course);
+          await setDoc(doc(db, 'courses', course.id), cleanCourse, { merge: true });
+          courseCount++;
+        }
       }
 
       // 3. Sync Students (sanitized)
@@ -659,6 +735,14 @@ export const FirebaseService = {
         await setDoc(doc(db, 'settings', 'payment'), payPayload, { merge: true });
         paySynced = true;
       }
+
+      // 7. Sync Tombstones (settings/tombstones)
+      await setDoc(doc(db, 'settings', 'tombstones'), {
+        deletedInstructorIds: StorageService.getDeletedInstructorIds(),
+        deletedCourseIds: StorageService.getDeletedCourseIds(),
+        deletedStudentIds: StorageService.getDeletedStudentIds(),
+        updatedAt: Date.now()
+      }, { merge: true });
 
       const extraDetails: string[] = [];
       if (enrollCount > 0) extraDetails.push(`${enrollCount} Đơn đăng ký`);

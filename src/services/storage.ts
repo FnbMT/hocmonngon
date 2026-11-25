@@ -22,6 +22,16 @@ const KEYS = {
   DELETED_STUDENT_IDS: 'hocmonngon_deleted_student_ids_v1'
 };
 
+export const DEFAULT_FIREBASE_CONFIG: FirebaseConfigState = {
+  apiKey: 'AIzaSyBoJI9fCieBnvcj-8ERIzvB-bRm_iM6ts0',
+  authDomain: 'hocmonngon.firebaseapp.com',
+  projectId: 'hocmonngon',
+  storageBucket: 'hocmonngon.firebasestorage.app',
+  messagingSenderId: '934080046665',
+  appId: '1:934080046665:web:8e7db5a8d9d0b02cd9c198',
+  isConnected: true
+};
+
 export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
   header: {
     brandName: 'Học Món Ngon',
@@ -1171,15 +1181,16 @@ export const StorageService = {
 
   // Firebase Config
   getFirebaseConfig(): FirebaseConfigState {
-    return safeGet<FirebaseConfigState>(KEYS.FIREBASE_CONFIG, {
-      apiKey: '',
-      authDomain: '',
-      projectId: '',
-      storageBucket: '',
-      messagingSenderId: '',
-      appId: '',
-      isConnected: false
-    });
+    const raw = safeGet<FirebaseConfigState>(KEYS.FIREBASE_CONFIG, DEFAULT_FIREBASE_CONFIG);
+    return {
+      apiKey: (raw.apiKey && raw.apiKey.trim()) || DEFAULT_FIREBASE_CONFIG.apiKey,
+      authDomain: (raw.authDomain && raw.authDomain.trim()) || DEFAULT_FIREBASE_CONFIG.authDomain,
+      projectId: (raw.projectId && raw.projectId.trim()) || DEFAULT_FIREBASE_CONFIG.projectId,
+      storageBucket: (raw.storageBucket && raw.storageBucket.trim()) || DEFAULT_FIREBASE_CONFIG.storageBucket,
+      messagingSenderId: (raw.messagingSenderId && raw.messagingSenderId.trim()) || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
+      appId: (raw.appId && raw.appId.trim()) || DEFAULT_FIREBASE_CONFIG.appId,
+      isConnected: raw.isConnected ?? DEFAULT_FIREBASE_CONFIG.isConnected
+    };
   },
   saveFirebaseConfig(config: FirebaseConfigState): void {
     safeSet(KEYS.FIREBASE_CONFIG, config);

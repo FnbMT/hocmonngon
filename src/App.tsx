@@ -209,6 +209,9 @@ export default function App() {
         onCourses: (crs) => {
           StorageService.setCoursesFromRemote(crs);
           reloadData();
+        },
+        onTombstones: () => {
+          reloadData();
         }
       });
     };
