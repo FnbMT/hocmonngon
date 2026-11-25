@@ -61,6 +61,7 @@ import { FirebaseService } from '../services/firebase';
 import { PaymentService } from '../services/paymentService';
 import { compressImage, formatFileSize } from '../utils/imageCompressor';
 import { toYouTubeEmbedUrl, extractYouTubeId, DEFAULT_YOUTUBE_ID } from '../utils/youtube';
+import { hashPassword } from '../utils/passwordHash';
 import { AdminPaymentSettings } from './AdminPaymentSettings';
 import { AdminHomepageSettings } from './AdminHomepageSettings';
 
@@ -1323,12 +1324,13 @@ service cloud.firestore {
   };
 
   // Handler: Add Instructor
-  const handleSaveInstructor = (e: React.FormEvent) => {
+  const handleSaveInstructor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newInstName.trim()) return;
 
     const assignedUsername = newInstUsername.trim().toLowerCase() || `chef${Math.floor(100 + Math.random() * 900)}`;
-    const assignedPassword = newInstPassword.trim() || '123456';
+    const assignedPassword = newInstPassword.trim() || `Hmn@${Math.floor(100000 + Math.random() * 900000)}`;
+    const hashedPassword = await hashPassword(assignedPassword);
     const assignedEmail = newInstEmail.trim() || `${assignedUsername}@hocmonngon.vn`;
     const cleanGroups = newInstCourseGroups
       .map(g => g.trim())
@@ -1348,7 +1350,7 @@ service cloud.firestore {
       phone: newInstPhone.trim(),
       zalo: newInstZalo.trim(),
       username: assignedUsername,
-      password: assignedPassword,
+      password: hashedPassword,
       email: assignedEmail,
       courseGroups: finalGroups
     };
@@ -1395,7 +1397,7 @@ service cloud.firestore {
     setEditInstPhone(chef.phone || '');
     setEditInstZalo(chef.zalo || '');
     setEditInstUsername(chef.username || '');
-    setEditInstPassword(chef.password || '');
+    setEditInstPassword('');
     setEditInstEmail(chef.email || '');
     setEditInstCourseGroups(groups);
     setEditInstOriginalGroups([...groups]);
@@ -1406,7 +1408,7 @@ service cloud.firestore {
   };
 
   // Handler: Update Existing Instructor
-  const handleUpdateInstructor = (e: React.FormEvent) => {
+  const handleUpdateInstructor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingChef || !editInstName.trim()) return;
 
@@ -1424,6 +1426,10 @@ service cloud.firestore {
       }
     });
 
+    const nextPassword = editInstPassword.trim()
+      ? await hashPassword(editInstPassword.trim())
+      : editingChef.password;
+
     const updated: Instructor = {
       ...editingChef,
       name: editInstName.trim(),
@@ -1434,7 +1440,7 @@ service cloud.firestore {
       phone: editInstPhone.trim(),
       zalo: editInstZalo.trim(),
       username: editInstUsername.trim().toLowerCase() || editingChef.username,
-      password: editInstPassword.trim() || editingChef.password,
+      password: nextPassword,
       email: editInstEmail.trim() || editingChef.email,
       courseGroups: finalGroups
     };
@@ -2435,8 +2441,8 @@ service cloud.firestore {
                       <span>Tài Khoản Đăng Nhập Của Bạn</span>
                     </h4>
                     <div className="text-xs space-y-1.5 pt-1">
-                      <p className="text-stone-600">Tên đăng nhập (User): <strong className="font-mono text-stone-900 bg-white px-2 py-0.5 rounded border border-stone-200">{currentInstructorProfile?.username || 'cheftuan'}</strong></p>
-                      <p className="text-stone-600">Mật khẩu: <strong className="font-mono text-stone-900 bg-white px-2 py-0.5 rounded border border-stone-200">{currentInstructorProfile?.password || '123456'}</strong></p>
+                      <p className="text-stone-600">Tên đăng nhập (User): <strong className="font-mono text-stone-900 bg-white px-2 py-0.5 rounded border border-stone-200">{currentInstructorProfile?.username || '—'}</strong></p>
+                      <p className="text-stone-600">Mật khẩu: <strong className="font-mono text-stone-900 bg-white px-2 py-0.5 rounded border border-stone-200">•••••••• (Đã mã hóa bảo mật)</strong></p>
                       <p className="text-stone-600">Email: <span className="font-mono text-stone-900">{currentInstructorProfile?.email || `${currentInstructorProfile?.username || 'chef'}@hocmonngon.vn`}</span></p>
                     </div>
                   </div>

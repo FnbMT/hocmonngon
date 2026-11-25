@@ -7,6 +7,10 @@
       "destination": "/api/sepay-webhook.ts"
     },
     {
+      "source": "/api/admin-auth",
+      "destination": "/api/admin-auth.ts"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

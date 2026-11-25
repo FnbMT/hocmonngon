@@ -249,11 +249,13 @@ export const FirebaseService = {
   // ==========================================
   async syncStudentToFirebase(student: Student): Promise<boolean> {
     try {
+      // Never store Admin accounts in Firestore students collection
+      if (student.role === 'admin' || student.id === 'admin-master') return false;
       if (!this.isConfigured()) return false;
       const db = this.getDb();
       if (!db) return false;
       const studentDocRef = doc(db, 'students', student.id);
-      const cleanData = sanitizeForFirestore(student);
+      const cleanData = sanitizeForFirestore({ ...student, role: 'student' });
       await setDoc(studentDocRef, cleanData, { merge: true });
       return true;
     } catch (e) {
@@ -469,11 +471,16 @@ export const FirebaseService = {
         });
       }
 
+      const deletedStudentIds = new Set(StorageService.getDeletedStudentIds());
       const students: Student[] = [];
       if (studentSnap && !studentSnap.empty) {
         studentSnap.forEach(d => {
           const item = d.data() as Student;
-          students.push({ ...item, id: item.id || d.id });
+          const sId = item.id || d.id;
+          // Never treat Admin accounts as students
+          if (item.role !== 'admin' && sId !== 'admin-master' && !deletedStudentIds.has(sId)) {
+            students.push({ ...item, id: sId });
+          }
         });
       }
 
@@ -702,9 +709,21 @@ export const FirebaseService = {
         }
       }
 
-      // 3. Sync Students (sanitized)
+      // 3. Sync Students (sanitized) & purge any legacy admin docs from students collection
+      const existingStudentSnap = await getDocs(collection(db, 'students')).catch(() => null);
+      if (existingStudentSnap && !existingStudentSnap.empty) {
+        for (const docSnap of existingStudentSnap.docs) {
+          const sData = docSnap.data();
+          if (docSnap.id === 'admin-master' || sData.role === 'admin') {
+            await deleteDoc(docSnap.ref).catch(() => {});
+          }
+        }
+      }
+      await deleteDoc(doc(db, 'students', 'admin-master')).catch(() => {});
+
       for (const student of data.students) {
-        const cleanStudent = sanitizeForFirestore(student);
+        if (student.role === 'admin' || student.id === 'admin-master') continue;
+        const cleanStudent = sanitizeForFirestore({ ...student, role: 'student' });
         await setDoc(doc(db, 'students', student.id), cleanStudent, { merge: true });
         studentCount++;
       }

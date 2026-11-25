@@ -102,6 +102,7 @@ export interface Student {
   avatar?: string;
   role: 'student' | 'admin' | 'instructor';
   instructorId?: string;
+  passwordHash?: string;
   registeredAt: string;
   goal?: string;
   discounts?: StudentDiscount[];

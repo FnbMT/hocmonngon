@@ -1,16 +1,22 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
+import adminAuthHandler from './api/admin-auth.ts';
 
-const DEV_STATE_FILE = path.resolve(__dirname, '.studio-dev-state.json');
+// Load local .env / .env.local for server-side dev middlewares (e.g. ADMIN_PASSWORD)
+dotenv.config({ path: path.resolve(import.meta.dirname, '.env.local') });
+dotenv.config({ path: path.resolve(import.meta.dirname, '.env') });
+
+const DEV_STATE_FILE = path.resolve(import.meta.dirname, '.studio-dev-state.json');
 
 export default defineConfig(() => {
   return {
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {
@@ -127,6 +133,14 @@ export default defineConfig(() => {
 
             res.statusCode = 405;
             res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+          });
+        }
+      },
+      {
+        name: 'admin-auth-dev-api',
+        configureServer(server) {
+          server.middlewares.use('/api/admin-auth', (req, res) => {
+            void adminAuthHandler(req, res);
           });
         }
       }

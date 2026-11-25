@@ -3,14 +3,12 @@ import {
   X, 
   Eye, 
   EyeOff, 
-  ArrowRight, 
-  ShieldCheck, 
-  Star,
-  Users,
-  CheckCircle2
+  ArrowRight
 } from 'lucide-react';
 import { Student } from '../types';
 import { StorageService } from '../services/storage';
+import { AuthService } from '../services/authService';
+import { hashPassword, isHashedPassword, verifyPassword } from '../utils/passwordHash';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -32,93 +30,152 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setAuthError(null);
-    const cleanId = identifier.trim().toLowerCase();
+    setIsSubmitting(true);
 
-    // Check if logging in with Admin credentials (only in login mode)
-    if (mode === 'login' && (cleanId === 'admin@hocmonngon.vn' || cleanId === 'admin')) {
-      if (password && password !== '123456' && password !== 'admin') {
-        setAuthError('Mật khẩu Quản trị viên chưa chính xác (mặc định: 123456)');
+    try {
+      const cleanId = identifier.trim().toLowerCase();
+      const cleanPhone = cleanId.replace(/[\s.-]/g, '');
+
+      if (!cleanId || !password) {
+        setAuthError('Vui lòng nhập đầy đủ thông tin đăng nhập và mật khẩu.');
         return;
       }
-      const adminUser: Student = {
-        id: 'admin-master',
-        name: 'Quản Trị Viên Hệ Thống',
-        email: 'admin@hocmonngon.vn',
-        phone: '0988409798',
-        role: 'admin',
-        registeredAt: '2025-01-01'
-      };
-      StorageService.setCurrentUser(adminUser);
-      onLoginSuccess(adminUser);
-      onClose();
-      return;
-    }
 
-    // Check if logging in with Instructor credentials (username, email, or phone)
-    if (mode === 'login') {
-      const instructorCandidate = StorageService.findInstructorByCredentials(cleanId);
-      if (instructorCandidate) {
-        if (instructorCandidate.password && password && instructorCandidate.password !== password) {
-          setAuthError(`Mật khẩu cho Giảng viên "${instructorCandidate.name}" chưa chính xác!`);
+      if (mode === 'login') {
+        // 1. Kiểm tra đăng nhập Giảng viên (username, email hoặc SĐT)
+        const instructorCandidate = StorageService.findInstructorByCredentials(cleanId);
+        if (instructorCandidate) {
+          const isMatch = await verifyPassword(password, instructorCandidate.password);
+          if (!isMatch) {
+            setAuthError('Thông tin đăng nhập hoặc mật khẩu chưa chính xác.');
+            return;
+          }
+
+          // Tự động nâng cấp mật khẩu giảng viên cũ sang định dạng băm SHA-256 + Salt
+          if (instructorCandidate.password && !isHashedPassword(instructorCandidate.password)) {
+            const upgradedHash = await hashPassword(password);
+            StorageService.updateInstructor({
+              ...instructorCandidate,
+              password: upgradedHash,
+            });
+          }
+
+          const instructorUser: Student = {
+            id: `instructor-user-${instructorCandidate.id}`,
+            name: instructorCandidate.name,
+            email: instructorCandidate.email || `${instructorCandidate.username || instructorCandidate.id}@hocmonngon.vn`,
+            phone: instructorCandidate.phone || '',
+            avatar: instructorCandidate.avatar,
+            role: 'instructor',
+            instructorId: instructorCandidate.id,
+            registeredAt: '2025-01-01'
+          };
+          StorageService.setCurrentUser(instructorUser);
+          onLoginSuccess(instructorUser);
+          onClose();
           return;
         }
-        const instructorUser: Student = {
-          id: `instructor-user-${instructorCandidate.id}`,
-          name: instructorCandidate.name,
-          email: instructorCandidate.email || `${instructorCandidate.username || instructorCandidate.id}@hocmonngon.vn`,
-          phone: instructorCandidate.phone || '',
-          avatar: instructorCandidate.avatar,
-          role: 'instructor',
-          instructorId: instructorCandidate.id,
-          registeredAt: '2025-01-01'
-        };
-        StorageService.setCurrentUser(instructorUser);
-        onLoginSuccess(instructorUser);
-        onClose();
-        return;
-      }
 
-      const found = students.find(
-        s => s.email.toLowerCase() === cleanId || s.phone === cleanId
-      );
-      if (found) {
-        StorageService.setCurrentUser(found);
-        onLoginSuccess(found);
+        // 2. Kiểm tra đăng nhập Học viên
+        const foundStudent = students.find(s => {
+          if (s.role === 'admin' || s.id === 'admin-master') return false;
+          const sEmail = (s.email || '').trim().toLowerCase();
+          const sPhone = (s.phone || '').trim().replace(/[\s.-]/g, '');
+          return (sEmail && sEmail === cleanId) || (sPhone && sPhone === cleanPhone);
+        });
+
+        if (foundStudent) {
+          if (foundStudent.passwordHash) {
+            const isMatch = await verifyPassword(password, foundStudent.passwordHash);
+            if (!isMatch) {
+              setAuthError('Thông tin đăng nhập hoặc mật khẩu chưa chính xác.');
+              return;
+            }
+          } else {
+            // Học viên cũ đăng ký học thử trước đây chưa đặt mật khẩu -> thiết lập mật khẩu băm lần đầu
+            if (password.length < 6) {
+              setAuthError('Mật khẩu phải có tối thiểu 6 ký tự.');
+              return;
+            }
+            const firstHash = await hashPassword(password);
+            const upgradedStudent: Student = {
+              ...foundStudent,
+              role: 'student',
+              passwordHash: firstHash,
+            };
+            StorageService.addStudent(upgradedStudent);
+            StorageService.setCurrentUser(upgradedStudent);
+            onLoginSuccess(upgradedStudent);
+            onClose();
+            return;
+          }
+
+          StorageService.setCurrentUser(foundStudent);
+          onLoginSuccess(foundStudent);
+          onClose();
+          return;
+        }
+
+        // 3. Xác thực tài khoản Quản trị viên qua Vercel Serverless API (/api/admin-auth)
+        // Không lưu mật khẩu Admin trên trình duyệt; đối chiếu bằng biến môi trường ADMIN_PASSWORD + cấp HttpOnly Cookie
+        const adminRes = await AuthService.loginAdmin(cleanId, password);
+        if (adminRes.success && adminRes.user) {
+          StorageService.setCurrentUser(adminRes.user);
+          onLoginSuccess(adminRes.user);
+          onClose();
+          return;
+        }
+
+        setAuthError(adminRes.message || 'Thông tin đăng nhập hoặc mật khẩu chưa chính xác.');
+        return;
       } else {
-        // Log in / create session as student
+        // Đăng ký tài khoản mới: BẮT BUỘC LUÔN LÀ HỌC VIÊN & BĂM MẬT KHẨU
+        if (password.length < 6) {
+          setAuthError('Mật khẩu phải có tối thiểu 6 ký tự để đảm bảo an toàn.');
+          return;
+        }
+
+        if (cleanId === 'admin' || cleanId === 'admin@hocmonngon.vn') {
+          setAuthError('Tên đăng nhập này không khả dụng. Vui lòng chọn Email hoặc Số điện thoại khác.');
+          return;
+        }
+
+        const alreadyExists = students.some(s => {
+          const sEmail = (s.email || '').trim().toLowerCase();
+          const sPhone = (s.phone || '').trim().replace(/[\s.-]/g, '');
+          return (sEmail && sEmail === cleanId) || (sPhone && sPhone === cleanPhone);
+        });
+
+        if (alreadyExists) {
+          setAuthError('Email hoặc Số điện thoại này đã được đăng ký. Vui lòng chuyển sang tab Đăng nhập.');
+          return;
+        }
+
+        const hashedPassword = await hashPassword(password);
         const newStudent: Student = {
           id: 'student-' + Date.now(),
-          name: identifier.split('@')[0] || 'Học viên',
-          email: identifier.includes('@') ? identifier.trim() : `${identifier.trim()}@hocmonngon.vn`,
-          phone: identifier.includes('@') ? '0912345678' : identifier.trim(),
+          name: name.trim() || 'Học viên mới',
+          email: identifier.includes('@') ? identifier.trim().toLowerCase() : `${cleanPhone}@hocmonngon.vn`,
+          phone: identifier.includes('@') ? '' : identifier.trim(),
           role: 'student',
+          passwordHash: hashedPassword,
           registeredAt: new Date().toISOString().split('T')[0]
         };
         StorageService.addStudent(newStudent);
         StorageService.setCurrentUser(newStudent);
         onLoginSuccess(newStudent);
+        onClose();
       }
-      onClose();
-    } else {
-      // Đăng ký tài khoản mới: BẮT BUỘC LUÔN LÀ HỌC VIÊN
-      const newStudent: Student = {
-        id: 'student-' + Date.now(),
-        name: name.trim() || 'Học viên mới',
-        email: identifier.includes('@') ? identifier.trim() : `${identifier.trim()}@gmail.com`,
-        phone: identifier.includes('@') ? '0988776655' : identifier.trim(),
-        role: 'student',
-        registeredAt: new Date().toISOString().split('T')[0]
-      };
-      StorageService.addStudent(newStudent);
-      StorageService.setCurrentUser(newStudent);
-      onLoginSuccess(newStudent);
-      onClose();
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -176,22 +233,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         </div>
 
-        {/* Right Side: Normal Login / Register matching Image 7 */}
-        <div className="col-span-12 md:col-span-7 p-6 sm:p-10 flex flex-col justify-between">
+        {/* Right Side: Clean Login / Register Form */}
+        <div className="col-span-12 md:col-span-7 p-6 sm:p-10 flex flex-col justify-center">
           <div className="space-y-6">
-            {/* Standard Mode switch tabs matching Image 7 */}
+            {/* Standard Mode switch tabs */}
             <div className="flex bg-stone-100 p-1 rounded-xl text-xs font-bold text-stone-600 max-w-xs">
               <button
                 type="button"
-                onClick={() => setMode('login')}
-                className={`flex-1 py-2 rounded-lg transition-all ${mode === 'login' ? 'bg-white text-stone-900 shadow-xs' : 'hover:text-stone-900'}`}
+                onClick={() => {
+                  setMode('login');
+                  setAuthError(null);
+                }}
+                className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${mode === 'login' ? 'bg-white text-stone-900 shadow-xs' : 'hover:text-stone-900'}`}
               >
                 Đăng nhập
               </button>
               <button
                 type="button"
-                onClick={() => setMode('register')}
-                className={`flex-1 py-2 rounded-lg transition-all ${mode === 'register' ? 'bg-white text-stone-900 shadow-xs' : 'hover:text-stone-900'}`}
+                onClick={() => {
+                  setMode('register');
+                  setAuthError(null);
+                }}
+                className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${mode === 'register' ? 'bg-white text-stone-900 shadow-xs' : 'hover:text-stone-900'}`}
               >
                 Đăng ký tài khoản mới
               </button>
@@ -199,64 +262,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             <div>
               <h2 className="text-xl font-black text-stone-900">
-                {mode === 'login' ? 'Đăng Nhập Vào Học Ngay' : 'Đăng Ký Tài Khoản Học Viên'}
+                {mode === 'login' ? 'Đăng Nhập Tài Khoản' : 'Đăng Ký Tài Khoản Thành Viên'}
               </h2>
               <p className="text-xs text-stone-500 mt-1">
-                Nhập thông tin tài khoản hoặc sử dụng đăng nhập nhanh
+                {mode === 'login'
+                  ? 'Dành cho Học viên và Giảng viên truy cập vào hệ thống.'
+                  : 'Tạo tài khoản thành viên mới để tham gia các khóa học.'}
               </p>
-            </div>
-
-            {/* Social Logins matching Image 7 */}
-            <div className="grid grid-cols-4 gap-2">
-              <button 
-                type="button"
-                onClick={() => {
-                  onLoginSuccess(students[0]);
-                  onClose();
-                }}
-                className="py-2.5 px-2 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl text-[11px] font-bold text-stone-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <span className="text-red-600 font-bold">G</span> Google
-              </button>
-              <button 
-                type="button"
-                onClick={() => {
-                  onLoginSuccess(students[0]);
-                  onClose();
-                }}
-                className="py-2.5 px-2 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl text-[11px] font-bold text-stone-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <span className="text-blue-600 font-bold">f</span> Facebook
-              </button>
-              <button 
-                type="button"
-                onClick={() => {
-                  onLoginSuccess(students[0]);
-                  onClose();
-                }}
-                className="py-2.5 px-2 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl text-[11px] font-bold text-stone-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                Apple
-              </button>
-              <button 
-                type="button"
-                onClick={() => {
-                  onLoginSuccess(students[0]);
-                  onClose();
-                }}
-                className="py-2.5 px-2 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl text-[11px] font-bold text-blue-600 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                Zalo
-              </button>
-            </div>
-
-            <div className="relative text-center my-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-stone-200" />
-              </div>
-              <span className="relative bg-white px-3 text-[11px] text-stone-400 font-medium">
-                Hoặc tiếp tục với tài khoản
-              </span>
             </div>
 
             {/* Auth Error Banner */}
@@ -266,14 +278,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button 
                   type="button" 
                   onClick={() => setAuthError(null)} 
-                  className="p-1 hover:bg-red-100 rounded text-red-500"
+                  className="p-1 hover:bg-red-100 rounded text-red-500 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
 
-            {/* Input Form matching Image 7 */}
+            {/* Input Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === 'register' && (
                 <div>
@@ -291,12 +303,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1">
-                  Số điện thoại hoặc Email
+                  {mode === 'login' ? 'Tên đăng nhập, Số điện thoại hoặc Email' : 'Số điện thoại hoặc Email'}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="vd: 0912345678 hoặc email@domain.com"
+                  placeholder={mode === 'login' ? 'Nhập tên đăng nhập, SĐT hoặc Email' : 'vd: 0912345678 hoặc email@domain.com'}
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:border-red-600 focus:bg-white"
@@ -326,66 +338,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs">
-                <label className="flex items-center gap-2 cursor-pointer text-stone-600 select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="rounded text-red-700 focus:ring-red-600"
-                  />
-                  <span>Ghi nhớ đăng nhập trên thiết bị này</span>
-                </label>
-                <a href="#" className="font-semibold text-stone-700 hover:text-red-700">
-                  Quên mật khẩu?
-                </a>
-              </div>
+              {mode === 'login' && (
+                <div className="flex items-center justify-between text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer text-stone-600 select-none">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="rounded text-red-700 focus:ring-red-600"
+                    />
+                    <span>Ghi nhớ đăng nhập trên thiết bị này</span>
+                  </label>
+                </div>
+              )}
 
               <button
                 type="submit"
-                className="w-full py-3.5 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isSubmitting}
+                className="w-full py-3.5 bg-red-700 hover:bg-red-800 disabled:bg-stone-400 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>{mode === 'login' ? 'Đăng Nhập Ngay' : 'Tạo Tài Khoản Học Viên'}</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>
+                  {isSubmitting
+                    ? 'Đang xác thực...'
+                    : mode === 'login'
+                      ? 'Đăng Nhập Ngay'
+                      : 'Tạo Tài Khoản Thành Viên'}
+                </span>
+                {!isSubmitting && <ArrowRight className="w-4 h-4" />}
               </button>
-
-              {mode === 'login' && (
-                <div className="pt-2 text-center space-y-1.5 border-t border-stone-100 mt-2">
-                  <p className="text-[11px] text-stone-500 font-semibold">Tài khoản demo kiểm thử nhanh:</p>
-                  <div className="flex flex-wrap justify-center gap-1.5 text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIdentifier('cheftuan');
-                        setPassword('123456');
-                      }}
-                      className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold transition-colors cursor-pointer"
-                    >
-                      Giảng viên: Chef Tuấn (cheftuan / 123456)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIdentifier('chefdong');
-                        setPassword('123456');
-                      }}
-                      className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold transition-colors cursor-pointer"
-                    >
-                      Giảng viên: Bếp trưởng Đông (chefdong / 123456)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIdentifier('admin');
-                        setPassword('123456');
-                      }}
-                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-900 border border-stone-300 font-bold transition-colors cursor-pointer"
-                    >
-                      Quản trị viên (admin / 123456)
-                    </button>
-                  </div>
-                </div>
-              )}
             </form>
           </div>
         </div>

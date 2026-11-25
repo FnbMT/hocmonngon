@@ -543,7 +543,9 @@ export const StorageService = {
   setStudentsFromRemote(students: Student[]): void {
     if (students) {
       const deletedIds = new Set(this.getDeletedStudentIds());
-      const filtered = students.filter(s => !deletedIds.has(s.id));
+      const filtered = students.filter(
+        s => !deletedIds.has(s.id) && s.role !== 'admin' && s.id !== 'admin-master'
+      );
       safeSet(KEYS.STUDENTS, filtered);
     }
   },
@@ -804,14 +806,16 @@ export const StorageService = {
     this.updateCourse(course);
   },
 
-  // Students
+  // Students (strictly excludes Admin accounts — Admin is authenticated server-side only)
   getStudents(): Student[] {
     const deletedIds = new Set(this.getDeletedStudentIds());
     const list = safeGet<Student[]>(KEYS.STUDENTS, INITIAL_STUDENTS);
-    return list.filter(s => !deletedIds.has(s.id)).map(s => ({
-      ...s,
-      avatar: (s.avatar && s.avatar.trim()) ? s.avatar : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'
-    }));
+    return list
+      .filter(s => !deletedIds.has(s.id) && s.role !== 'admin' && s.id !== 'admin-master')
+      .map(s => ({
+        ...s,
+        avatar: (s.avatar && s.avatar.trim()) ? s.avatar : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'
+      }));
   },
   getStudentById(id: string): Student | undefined {
     return this.getStudents().find(s => s.id === id || s.email === id);
@@ -834,6 +838,7 @@ export const StorageService = {
 
     const sanitizedStudent: Student = {
       ...student,
+      role: 'student', // Never allow privilege escalation into admin/instructor via student registration
       avatar: (student.avatar && student.avatar.trim()) ? student.avatar : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'
     };
 
@@ -846,10 +851,12 @@ export const StorageService = {
     if (existing) {
       const updated: Student = {
         ...existing,
+        role: 'student',
         name: sanitizedStudent.name || existing.name,
         phone: sanitizedStudent.phone || existing.phone,
         email: sanitizedStudent.email || existing.email,
         goal: sanitizedStudent.goal || existing.goal,
+        passwordHash: sanitizedStudent.passwordHash || existing.passwordHash,
         avatar: sanitizedStudent.avatar || existing.avatar
       };
       const updatedList = list.map(item => item.id === existing.id ? updated : item);

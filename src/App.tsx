@@ -3,6 +3,7 @@ import { StorageService } from './services/storage';
 import { FirebaseService } from './services/firebase';
 import { PaymentService } from './services/paymentService';
 import { DevPersistence } from './services/devPersistence';
+import { AuthService } from './services/authService';
 import { Course, Instructor, Student, Enrollment, ChefQuestion, HomepageConfig } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -60,6 +61,7 @@ export default function App() {
   const [students, setStudents] = useState<Student[]>(StorageService.getStudents());
   const [enrollments, setEnrollments] = useState<Enrollment[]>(StorageService.getEnrollments());
   const [currentUser, setCurrentUser] = useState<Student | null>(StorageService.getCurrentUser());
+  const [adminSessionVerified, setAdminSessionVerified] = useState<boolean>(false);
   const [questions, setQuestions] = useState<ChefQuestion[]>(StorageService.getQuestions());
   const [homepageConfig, setHomepageConfig] = useState<HomepageConfig>(() => StorageService.getHomepageConfig());
 
@@ -226,6 +228,28 @@ export default function App() {
       if (isMounted && restored) {
         reloadData();
       }
+
+      // Xác minh phiên Quản trị viên bằng HttpOnly Cookie từ máy chủ (/api/admin-auth)
+      // Ngăn chặn hoàn toàn hành vi giả mạo role: 'admin' qua F12 LocalStorage
+      const adminCheck = await AuthService.verifyAdminSession();
+      if (isMounted) {
+        if (adminCheck.authenticated && adminCheck.user) {
+          setAdminSessionVerified(true);
+          const localUser = StorageService.getCurrentUser();
+          if (!localUser || localUser.role === 'admin') {
+            StorageService.setCurrentUser(adminCheck.user);
+            setCurrentUser(adminCheck.user);
+          }
+        } else {
+          setAdminSessionVerified(false);
+          const localUser = StorageService.getCurrentUser();
+          if (localUser?.role === 'admin') {
+            StorageService.setCurrentUser(null);
+            setCurrentUser(null);
+          }
+        }
+      }
+
       await startRealtimeSync();
     };
     bootstrap();
@@ -606,6 +630,9 @@ export default function App() {
   const handleLoginSuccess = (user: Student) => {
     StorageService.setCurrentUser(user);
     setCurrentUser(user);
+    if (user.role === 'admin') {
+      setAdminSessionVerified(true);
+    }
     if (user.role === 'admin' || user.role === 'instructor') {
       syncUrlParams('admin');
       setCurrentView('admin');
@@ -619,6 +646,10 @@ export default function App() {
 
   // Logout
   const handleLogout = () => {
+    if (currentUser?.role === 'admin') {
+      void AuthService.logoutAdmin();
+      setAdminSessionVerified(false);
+    }
     StorageService.setCurrentUser(null);
     setCurrentUser(null);
     showToast('Đã đăng xuất tài khoản.');
@@ -771,15 +802,47 @@ export default function App() {
           )}
 
           {currentView === 'admin' && (
-            <AdminDashboard
-              students={students}
-              enrollments={enrollments}
-              courses={courses}
-              instructors={instructors}
-              currentUser={currentUser || undefined}
-              onRefreshData={reloadData}
-              onNavigate={handleNavigate}
-            />
+            (currentUser?.role === 'admin' && adminSessionVerified) || currentUser?.role === 'instructor' ? (
+              <AdminDashboard
+                students={students}
+                enrollments={enrollments}
+                courses={courses}
+                instructors={instructors}
+                currentUser={currentUser}
+                onRefreshData={reloadData}
+                onNavigate={handleNavigate}
+              />
+            ) : (
+              <div className="min-h-[65vh] flex items-center justify-center p-6">
+                <div className="max-w-md w-full bg-white border border-stone-200 rounded-3xl p-8 text-center shadow-sm space-y-4">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-red-50 text-red-700 flex items-center justify-center text-2xl font-black">
+                    🔒
+                  </div>
+                  <h2 className="text-xl font-black text-stone-900">
+                    Khu Vực Dành Cho Quản Trị & Giảng Viên
+                  </h2>
+                  <p className="text-xs text-stone-500 leading-relaxed">
+                    Phiên truy cập của bạn chưa được xác thực hoặc đã hết hạn. Vui lòng đăng nhập bằng tài khoản Quản trị viên hoặc Giảng viên để tiếp tục.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setAuthModalOpen(true)}
+                      className="px-5 py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-extrabold rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                      Đăng Nhập Ngay
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate('home')}
+                      className="px-5 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                    >
+                      Về Trang Chủ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
           )}
         </Suspense>
       </main>
