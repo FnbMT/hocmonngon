@@ -88,24 +88,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const currentInstructorProfile = instructors.find(i => i.id === currentInstructorId);
 
   // Local state for immediate reactive UI updates for instructors
-  const [localInstructors, setLocalInstructors] = useState<Instructor[]>(instructors);
+  const [localInstructors, setLocalInstructors] = useState<Instructor[]>(() => {
+    const deletedIds = new Set(StorageService.getDeletedInstructorIds());
+    return instructors.filter(i => !deletedIds.has(i.id));
+  });
   useEffect(() => {
-    setLocalInstructors(instructors);
+    const deletedIds = new Set(StorageService.getDeletedInstructorIds());
+    setLocalInstructors(instructors.filter(i => !deletedIds.has(i.id)));
   }, [instructors]);
 
   // Valid Enrollments: strictly only count enrollments for existing students and existing courses
   const validEnrollments = useMemo(() => {
-    const studentIdSet = new Set(students.map(s => s.id));
-    const courseIdSet = new Set(courses.map(c => c.id));
+    const deletedStudentIds = new Set(StorageService.getDeletedStudentIds());
+    const deletedCourseIds = new Set(StorageService.getDeletedCourseIds());
+    const studentIdSet = new Set(students.filter(s => !deletedStudentIds.has(s.id)).map(s => s.id));
+    const courseIdSet = new Set(courses.filter(c => !deletedCourseIds.has(c.id)).map(c => c.id));
     return enrollments.filter(e => studentIdSet.has(e.studentId) && courseIdSet.has(e.courseId));
   }, [enrollments, students, courses]);
 
   // Scoped lists: If instructor, strictly isolate to their own courses, enrollments, students and revenue
   const scopedCourses = useMemo(() => {
+    const deletedCourseIds = new Set(StorageService.getDeletedCourseIds());
+    const activeCourses = courses.filter(c => !deletedCourseIds.has(c.id));
     if (isInstructor && currentInstructorId) {
-      return courses.filter(c => c.instructorId === currentInstructorId);
+      return activeCourses.filter(c => c.instructorId === currentInstructorId);
     }
-    return courses;
+    return activeCourses;
   }, [courses, isInstructor, currentInstructorId]);
 
   const scopedEnrollments = useMemo(() => {
@@ -410,14 +418,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Sync newCourseGroup when newCourseInstructorId changes
   useEffect(() => {
     const effectiveId = (isInstructor && currentInstructorId) ? currentInstructorId : newCourseInstructorId;
-    const chef = instructors.find(i => i.id === effectiveId);
+    const chef = localInstructors.find(i => i.id === effectiveId);
     const groups = (chef?.courseGroups && chef.courseGroups.length > 0)
       ? chef.courseGroups
       : ['KHÓA HỌC ONLINE MỞ QUÁN'];
     if (!groups.some(g => g.toLowerCase() === newCourseGroup.trim().toLowerCase())) {
       setNewCourseGroup(groups[0]);
     }
-  }, [newCourseInstructorId, instructors, isInstructor, currentInstructorId]);
+  }, [newCourseInstructorId, localInstructors, isInstructor, currentInstructorId]);
 
   const filteredCoursesForTab3 = useMemo(() => {
     let list = scopedCourses;
@@ -452,10 +460,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }[] = [];
 
     const visibleInstructors = isInstructor && currentInstructorId
-      ? instructors.filter(i => i.id === currentInstructorId)
+      ? localInstructors.filter(i => i.id === currentInstructorId)
       : (!isInstructor && tab3InstructorFilter !== 'all'
-          ? instructors.filter(i => i.id === tab3InstructorFilter)
-          : instructors);
+          ? localInstructors.filter(i => i.id === tab3InstructorFilter)
+          : localInstructors);
 
     const matchedCourseIds = new Set<string>();
 
@@ -517,7 +525,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     return sections;
-  }, [filteredCoursesForTab3, instructors, isInstructor, currentInstructorId, tab3InstructorFilter]);
+  }, [filteredCoursesForTab3, localInstructors, isInstructor, currentInstructorId, tab3InstructorFilter]);
 
   // Firebase Config Form
   const [fbConfig, setFbConfig] = useState<FirebaseConfigState>(StorageService.getFirebaseConfig());
@@ -1403,7 +1411,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!newCourseTitle.trim()) return;
 
     const effectiveInstructorId = (isInstructor && currentInstructorId) ? currentInstructorId : newCourseInstructorId;
-    const chef = instructors.find(i => i.id === effectiveInstructorId) || currentInstructorProfile || instructors[0];
+    const chef = localInstructors.find(i => i.id === effectiveInstructorId) || currentInstructorProfile || localInstructors[0];
     const defaultThumb = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80';
     const defaultChefAvatar = 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&w=400&q=80';
     const chefGroups = (chef?.courseGroups && chef.courseGroups.length > 0)
@@ -1748,9 +1756,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const sepayConfig = PaymentService.getSePayConfig();
 
     const res = await FirebaseService.syncAllDataToFirebase({
-      instructors,
-      courses,
-      students,
+      instructors: localInstructors,
+      courses: StorageService.getCourses(),
+      students: StorageService.getStudents(),
       enrollments,
       homepageConfig: hpConfig,
       bankConfig,
@@ -2687,14 +2695,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                 {/* Tìm kiếm nhanh khóa học & Lọc giảng viên */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                  {!isInstructor && instructors.length > 1 && (
+                  {!isInstructor && localInstructors.length > 1 && (
                     <select
                       value={tab3InstructorFilter}
                       onChange={(e) => setTab3InstructorFilter(e.target.value)}
                       className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-bold text-stone-700 focus:outline-none focus:border-red-600 cursor-pointer"
                     >
-                      <option value="all">Tất cả giảng viên ({instructors.length})</option>
-                      {instructors.map(chef => (
+                      <option value="all">Tất cả giảng viên ({localInstructors.length})</option>
+                      {localInstructors.map(chef => (
                         <option key={chef.id} value={chef.id}>
                           GV: {chef.name}
                         </option>
@@ -2955,7 +2963,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </span>
                         {/* Chuyển nhóm khóa học trực tiếp */}
                         {(() => {
-                          const ownerChef = instructors.find(i => i.id === selectedCourseForLessons.instructorId);
+                          const ownerChef = localInstructors.find(i => i.id === selectedCourseForLessons.instructorId);
                           const ownerGroups = (ownerChef?.courseGroups && ownerChef.courseGroups.length > 0)
                             ? ownerChef.courseGroups
                             : ['KHÓA HỌC ONLINE MỞ QUÁN'];
@@ -5098,7 +5106,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {/* Giảng viên phụ trách & Nhóm khóa học trên Trang Chủ */}
               {(() => {
                 const effectiveId = (isInstructor && currentInstructorId) ? currentInstructorId : newCourseInstructorId;
-                const selectedChef = instructors.find(i => i.id === effectiveId) || instructors[0];
+                const selectedChef = localInstructors.find(i => i.id === effectiveId) || localInstructors[0];
                 const chefGroups = (selectedChef?.courseGroups && selectedChef.courseGroups.length > 0)
                   ? selectedChef.courseGroups
                   : ['KHÓA HỌC ONLINE MỞ QUÁN'];
@@ -5125,7 +5133,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           }}
                           className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-xl font-medium"
                         >
-                          {instructors.map(chef => (
+                          {localInstructors.map(chef => (
                             <option key={chef.id} value={chef.id}>{chef.name}</option>
                           ))}
                         </select>

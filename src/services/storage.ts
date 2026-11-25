@@ -16,7 +16,10 @@ const KEYS = {
   CURRENT_USER: 'hocmonngon_current_user_v1',
   QUESTIONS: 'hocmonngon_questions_v1',
   FIREBASE_CONFIG: 'hocmonngon_firebase_config_v1',
-  HOMEPAGE_CONFIG: 'hocmonngon_homepage_config_v1'
+  HOMEPAGE_CONFIG: 'hocmonngon_homepage_config_v1',
+  DELETED_INSTRUCTOR_IDS: 'hocmonngon_deleted_instructor_ids_v1',
+  DELETED_COURSE_IDS: 'hocmonngon_deleted_course_ids_v1',
+  DELETED_STUDENT_IDS: 'hocmonngon_deleted_student_ids_v1'
 };
 
 export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
@@ -156,10 +159,55 @@ const syncToFirebase = (action: () => Promise<unknown>) => {
 };
 
 export const StorageService = {
+  // Tombstone (Deleted records tracking to prevent resurrection from remote sync/stale cache)
+  getDeletedInstructorIds(): string[] {
+    return safeGet<string[]>(KEYS.DELETED_INSTRUCTOR_IDS, []);
+  },
+  addDeletedInstructorId(id: string): void {
+    const list = this.getDeletedInstructorIds();
+    if (!list.includes(id)) {
+      safeSet(KEYS.DELETED_INSTRUCTOR_IDS, [...list, id]);
+    }
+  },
+  removeDeletedInstructorId(id: string): void {
+    const list = this.getDeletedInstructorIds();
+    safeSet(KEYS.DELETED_INSTRUCTOR_IDS, list.filter(i => i !== id));
+  },
+
+  getDeletedCourseIds(): string[] {
+    return safeGet<string[]>(KEYS.DELETED_COURSE_IDS, []);
+  },
+  addDeletedCourseId(id: string): void {
+    const list = this.getDeletedCourseIds();
+    if (!list.includes(id)) {
+      safeSet(KEYS.DELETED_COURSE_IDS, [...list, id]);
+    }
+  },
+  removeDeletedCourseId(id: string): void {
+    const list = this.getDeletedCourseIds();
+    safeSet(KEYS.DELETED_COURSE_IDS, list.filter(i => i !== id));
+  },
+
+  getDeletedStudentIds(): string[] {
+    return safeGet<string[]>(KEYS.DELETED_STUDENT_IDS, []);
+  },
+  addDeletedStudentId(id: string): void {
+    const list = this.getDeletedStudentIds();
+    if (!list.includes(id)) {
+      safeSet(KEYS.DELETED_STUDENT_IDS, [...list, id]);
+    }
+  },
+  removeDeletedStudentId(id: string): void {
+    const list = this.getDeletedStudentIds();
+    safeSet(KEYS.DELETED_STUDENT_IDS, list.filter(i => i !== id));
+  },
+
   // Instructors
   getInstructors(): Instructor[] {
+    const deletedIds = new Set(this.getDeletedInstructorIds());
     const list = safeGet<Instructor[]>(KEYS.INSTRUCTORS, INITIAL_INSTRUCTORS);
-    const mapped = list.map((inst, idx) => {
+    const filtered = list.filter(inst => !deletedIds.has(inst.id));
+    const mapped = filtered.map((inst, idx) => {
       const mock = INITIAL_INSTRUCTORS.find(m => m.id === inst.id);
       const cleanGroups = (inst.courseGroups || [])
         .map(g => g.trim())
@@ -201,14 +249,17 @@ export const StorageService = {
     return matched;
   },
   setInstructorsFromRemote(instructors: Instructor[]): void {
-    if (instructors && instructors.length > 0) {
-      const sorted = [...instructors].sort(
+    if (instructors) {
+      const deletedIds = new Set(this.getDeletedInstructorIds());
+      const filtered = instructors.filter(i => !deletedIds.has(i.id));
+      const sorted = [...filtered].sort(
         (a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER)
       );
       safeSet(KEYS.INSTRUCTORS, sorted);
     }
   },
   addInstructor(instructor: Instructor): void {
+    this.removeDeletedInstructorId(instructor.id);
     const cleanGroups = (instructor.courseGroups || [])
       .map(g => g.trim())
       .filter((g, idx, arr) => g.length > 0 && arr.indexOf(g) === idx);
@@ -379,6 +430,9 @@ export const StorageService = {
     });
   },
   deleteInstructor(id: string): { chefName: string; deletedCoursesCount: number } {
+    // 0. Mark instructor as permanently deleted in Tombstone registry
+    this.addDeletedInstructorId(id);
+
     const instructors = this.getInstructors();
     const chef = instructors.find(item => item.id === id);
     const chefName = chef?.name || 'Giảng viên';
@@ -387,10 +441,11 @@ export const StorageService = {
     const updatedInstructors = instructors.filter(item => item.id !== id);
     safeSet(KEYS.INSTRUCTORS, updatedInstructors);
 
-    // 2. Cascade delete all courses belonging to this instructor locally
+    // 2. Cascade delete all courses belonging to this instructor locally and mark tombstone
     const allCourses = this.getCourses();
     const coursesToDelete = allCourses.filter(c => c.instructorId === id);
     const courseIdsToDelete = new Set(coursesToDelete.map(c => c.id));
+    courseIdsToDelete.forEach(cId => this.addDeletedCourseId(cId));
     const updatedCourses = allCourses.filter(c => c.instructorId !== id);
     safeSet(KEYS.COURSES, updatedCourses);
 
@@ -420,7 +475,9 @@ export const StorageService = {
 
   // Courses
   getCourses(): Course[] {
+    const deletedIds = new Set(this.getDeletedCourseIds());
     const list = safeGet<Course[]>(KEYS.COURSES, INITIAL_COURSES);
+    const filtered = list.filter(c => !deletedIds.has(c.id));
     const syntaxMap: Record<string, string> = {
       'course-pho-bo-truyen-thong': 'PHOBO',
       'course-sup-luon-xu-nghe': 'SUPLUON',
@@ -433,7 +490,7 @@ export const StorageService = {
       'course-nuoc-lau-doc-quyen': 'NUOCLAU',
       'course-mon-nhau-sot-bbq': 'MONNHAU'
     };
-    return list.map(c => ({
+    return filtered.map(c => ({
       ...c,
       transferSyntax: c.transferSyntax || syntaxMap[c.id] || (c.slug ? c.slug.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase() : `KHOA${c.id.slice(-4).toUpperCase()}`),
       thumbnail: (c.thumbnail && c.thumbnail.trim()) ? c.thumbnail : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
@@ -467,19 +524,24 @@ export const StorageService = {
     }
   },
   setCoursesFromRemote(courses: Course[]): void {
-    if (courses && courses.length > 0) {
-      safeSet(KEYS.COURSES, courses);
+    if (courses) {
+      const deletedIds = new Set(this.getDeletedCourseIds());
+      const filtered = courses.filter(c => !deletedIds.has(c.id));
+      safeSet(KEYS.COURSES, filtered);
     }
   },
   setStudentsFromRemote(students: Student[]): void {
-    if (students && students.length > 0) {
-      safeSet(KEYS.STUDENTS, students);
+    if (students) {
+      const deletedIds = new Set(this.getDeletedStudentIds());
+      const filtered = students.filter(s => !deletedIds.has(s.id));
+      safeSet(KEYS.STUDENTS, filtered);
     }
   },
   getCourseById(id: string): Course | undefined {
     return this.getCourses().find(c => c.id === id || c.slug === id);
   },
   addCourse(course: Course): void {
+    this.removeDeletedCourseId(course.id);
     const sanitized: Course = {
       ...course,
       thumbnail: (course.thumbnail && course.thumbnail.trim()) ? course.thumbnail : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
@@ -535,6 +597,7 @@ export const StorageService = {
     });
   },
   deleteCourse(id: string): void {
+    this.addDeletedCourseId(id);
     const allCourses = this.getCourses();
     const targetCourse = allCourses.find(c => c.id === id);
     const updatedCourses = allCourses.filter(c => c.id !== id);
@@ -733,8 +796,9 @@ export const StorageService = {
 
   // Students
   getStudents(): Student[] {
+    const deletedIds = new Set(this.getDeletedStudentIds());
     const list = safeGet<Student[]>(KEYS.STUDENTS, INITIAL_STUDENTS);
-    return list.map(s => ({
+    return list.filter(s => !deletedIds.has(s.id)).map(s => ({
       ...s,
       avatar: (s.avatar && s.avatar.trim()) ? s.avatar : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'
     }));
@@ -753,6 +817,7 @@ export const StorageService = {
     return this.getStudents().find(s => s.email && s.email.toLowerCase() === clean);
   },
   addStudent(student: Student): Student {
+    this.removeDeletedStudentId(student.id);
     const list = this.getStudents();
     const cleanPhone = student.phone ? student.phone.trim().replace(/[\s.-]/g, '') : '';
     const cleanEmail = student.email ? student.email.trim().toLowerCase() : '';
@@ -798,6 +863,7 @@ export const StorageService = {
     return sanitizedStudent;
   },
   deleteStudent(id: string): { studentName: string; deletedEnrollmentsCount: number } {
+    this.addDeletedStudentId(id);
     const students = this.getStudents();
     const student = students.find(s => s.id === id);
     const studentName = student?.name || 'Học viên';
